@@ -1,0 +1,16 @@
+# Build outputs
+/build/
+*.zip
+# Don't ignore release XPIs — those are tracked deliberately
+!/releases/*.xpi
+!/docs/releases/*.xpi
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor cruft
+.vscode/
+.idea/
+*.swp
+*~

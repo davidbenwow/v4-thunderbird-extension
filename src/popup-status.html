@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+  <div class="v4-popup wide">
+    <header>
+      <img src="images/icon-32.png" alt="" class="v4-logo">
+      <h1>V4 Contacts</h1>
+    </header>
+
+    <!-- Loading -->
+    <div id="state-loading" class="state">
+      <div class="spinner"></div>
+      <p>Checking email addresses…</p>
+    </div>
+
+    <!-- Config problems -->
+    <div id="state-not-configured" class="state hidden">
+      <p class="message">⚠️ Not configured</p>
+      <p class="hint">Open <strong>Tools → Add-ons and Themes → V4 Contacts Checker → Preferences</strong> to enter your API key.</p>
+    </div>
+
+    <div id="state-disabled" class="state hidden">
+      <p class="message">Plugin is off</p>
+      <p class="hint">Enable it in the Add-ons Manager preferences page.</p>
+    </div>
+
+    <div id="state-error" class="state hidden">
+      <p class="message">❌ Something went wrong</p>
+      <p class="hint" id="error-detail"></p>
+    </div>
+
+    <!-- Nothing to show: message had no external addresses at all -->
+    <div id="state-empty" class="state hidden">
+      <p class="message">Nothing to check</p>
+      <p class="hint">No external email addresses were found in this message.</p>
+    </div>
+
+    <!-- No leads to mark: addresses were checked, none are in V4 -->
+    <div id="state-no-leads" class="hidden">
+      <div class="no-leads-banner">
+        <span class="no-leads-icon">✓</span>
+        <div>
+          <div class="no-leads-title">Nothing to mark in V4</div>
+          <div class="no-leads-subtitle">None of the addresses in this message are leads in V4.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main results: leads to mark -->
+    <div id="state-results" class="state-results hidden">
+      <div id="leads-section" class="section section-primary"></div>
+    </div>
+  </div>
+
+  <script src="scripts/popup-status.js"></script>
+</body>
+</html>

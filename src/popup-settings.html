@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body class="settings-body">
+  <div class="v4-popup">
+    <header>
+      <img src="images/icon-32.png" alt="" class="v4-logo">
+      <h1>V4 Contacts — Settings</h1>
+    </header>
+
+    <div class="settings-form">
+      <label for="api-key">API Key</label>
+      <input id="api-key" type="text" placeholder="your-api-key">
+
+      <div class="actions">
+        <button id="save-btn" class="primary">Save</button>
+        <span id="save-status"></span>
+      </div>
+
+      <hr>
+
+      <div class="toggle-row">
+        <span>Plugin is:</span>
+        <button id="toggle-btn" class="toggle-on">ON</button>
+      </div>
+
+      <hr>
+
+      <div class="hint-block">
+        <p><strong>How it works:</strong></p>
+        <ul>
+          <li>The V4 toolbar icon shows an orange border when the message contains leads that need marking in V4.</li>
+          <li>Click the icon to see them, then <strong>Mark Lead in V4</strong> to open the lead's page in your browser where you can mark <em>response</em>, <em>manuscript</em>, or <em>rejected</em>.</li>
+          <li>The extension also scans the quoted thread — useful when a prospect replies from a different address.</li>
+          <li>You need to be logged into v4.vdm-vsg.de in your browser for the Mark button to work.</li>
+        </ul>
+
+        <details class="domain-details">
+          <summary>Ignored internal domains (69)</summary>
+          <p>Addresses from these domains are never sent to the V4 API:</p>
+          <ul class="domain-list" id="domain-list"></ul>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/internal-domains.js"></script>
+  <script src="scripts/popup-settings.js"></script>
+</body>
+</html>

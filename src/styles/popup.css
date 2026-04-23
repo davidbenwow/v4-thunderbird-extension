@@ -1,0 +1,589 @@
+/* =====================================================================
+   V4 Contacts Checker — v1.5 stylesheet
+   Design principles:
+   - Calm monochromatic base
+   - One accent color (omni orange) used sparingly
+   - System-native typography with proper scale
+   - Restrained semantic color use
+   ===================================================================== */
+
+:root {
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+               system-ui, Arial, sans-serif;
+
+  /* Neutral palette */
+  --ink-900: #0f1729;
+  --ink-700: #2b3547;
+  --ink-500: #5a6578;
+  --ink-400: #8592a6;
+  --ink-300: #bcc5d4;
+  --ink-200: #dfe4ec;
+  --ink-100: #eef1f6;
+  --ink-50:  #f7f9fc;
+  --surface: #ffffff;
+
+  /* Brand */
+  --brand-500: #e7741b;         /* omni orange */
+  --brand-600: #cf6516;
+  --brand-100: #fdf1e6;
+
+  /* Semantic */
+  --status-used:    #dc2626;
+  --status-used-bg: #fef2f2;
+  --status-pend:    #ea8c16;
+  --status-pend-bg: #fff7ed;
+  --status-ok:      #16a34a;
+  --status-ok-bg:   #f0fdf4;
+  --status-err:     #dc2626;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 41, 0.04);
+  --shadow-md: 0 2px 8px rgba(15, 23, 41, 0.08);
+  --shadow-btn: 0 1px 2px rgba(231, 116, 27, 0.25),
+                0 2px 4px rgba(231, 116, 27, 0.15);
+  --shadow-btn-hover: 0 2px 4px rgba(231, 116, 27, 0.3),
+                     0 4px 10px rgba(231, 116, 27, 0.2);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-900);
+  background: var(--ink-50);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body { min-width: 440px; }
+
+.v4-popup { padding: 0; }
+
+/* ========== Header ================================================== */
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--ink-900);
+  color: white;
+  border-bottom: 1px solid var(--ink-900);
+}
+
+.v4-logo {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+header h1 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  margin: 0;
+  color: white;
+}
+
+/* ========== State containers ======================================== */
+.state      { padding: 22px 20px; }
+.hidden     { display: none !important; }
+
+#state-loading, #state-empty {
+  text-align: center;
+  padding: 36px 20px;
+}
+
+.message {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin: 0 0 6px;
+  letter-spacing: -0.1px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-500);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ========== Spinner ================================================= */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ink-200);
+  border-top-color: var(--brand-500);
+  border-radius: 50%;
+  animation: spin 0.7s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ========== "No leads to mark" state ================================ */
+.no-leads-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 20px;
+  background: var(--surface);
+}
+
+.no-leads-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--status-ok-bg);
+  color: var(--status-ok);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+}
+
+.no-leads-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  letter-spacing: -0.1px;
+  margin-bottom: 2px;
+}
+
+.no-leads-subtitle {
+  font-size: 12px;
+  color: var(--ink-500);
+  line-height: 1.45;
+}
+
+/* ========== Sections ================================================ */
+.section { background: var(--surface); }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--ink-50);
+  border-top: 1px solid var(--ink-200);
+  border-bottom: 1px solid var(--ink-200);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink-500);
+  user-select: none;
+}
+
+.section-title { flex: 1; }
+
+/* ========== Lead cards ============================================== */
+.lead-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ink-100);
+  background: var(--surface);
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.lead-row:last-child { border-bottom: none; }
+
+.lead-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+}
+
+.lead-row.status-used::before    { background: var(--status-used); }
+.lead-row.status-pending::before { background: var(--status-pend); }
+
+.lead-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lead-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lead-email {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 3px;
+}
+
+.lead-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.source-hint {
+  font-size: 11px;
+  color: var(--ink-400);
+  font-weight: 500;
+}
+
+/* ========== Action area ============================================= */
+.lead-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* The Mark button — primary CTA, outlined style so the brand logo reads in its original color */
+.mark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: var(--surface);
+  color: var(--brand-600);
+  border: 1.5px solid var(--brand-500);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  transition: all 0.12s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.mark-btn:hover {
+  background: var(--brand-100);
+  border-color: var(--brand-600);
+  color: var(--brand-600);
+  transform: translateY(-1px);
+}
+
+.mark-btn:active {
+  transform: translateY(0);
+  background: var(--brand-100);
+}
+
+.mark-btn:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+}
+
+.mark-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.mark-label { line-height: 1.3; }
+
+/* Persisted "Opened in browser" state: green-tinted outline, still clickable
+   so the user can re-open V4 for this lead if they need to. */
+.mark-btn.opened {
+  color: var(--status-ok);
+  border-color: var(--status-ok);
+  background: var(--status-ok-bg, rgba(22, 163, 74, 0.08));
+}
+
+.mark-btn.opened:hover {
+  background: var(--status-ok-bg, rgba(22, 163, 74, 0.14));
+  border-color: var(--status-ok);
+  color: var(--status-ok);
+}
+
+.mark-btn.opened:focus-visible {
+  outline-color: var(--status-ok);
+}
+
+.mark-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  color: white;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Suppress hover lift while a click is in flight */
+.mark-btn.dispatching {
+  opacity: 0.7;
+  cursor: progress;
+  transform: none !important;
+}
+
+/* Icon-only secondary button (copy) */
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ink-200);
+  background: var(--surface);
+  padding: 0;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-500);
+  transition: all 0.12s ease;
+}
+
+.icon-btn:hover {
+  background: var(--ink-50);
+  border-color: var(--ink-300);
+  color: var(--ink-700);
+}
+
+.icon-btn:active {
+  background: var(--ink-100);
+}
+
+/* ========== Settings page =========================================== */
+.settings-body { min-width: 380px; }
+
+.settings-form {
+  padding: 18px 20px;
+  background: var(--surface);
+}
+
+.settings-form label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--ink-500);
+  margin-bottom: 5px;
+  margin-top: 12px;
+}
+
+.settings-form label:first-child { margin-top: 0; }
+
+.settings-form input[type="text"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink-900);
+  transition: all 0.12s ease;
+}
+
+.settings-form input[type="text"]:hover {
+  border-color: var(--ink-300);
+}
+
+.settings-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(231, 116, 27, 0.12);
+}
+
+.settings-form input[type="text"]::placeholder {
+  color: var(--ink-400);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+button.primary {
+  background: var(--brand-500);
+  color: white;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow-btn);
+  transition: all 0.12s ease;
+}
+
+button.primary:hover {
+  background: var(--brand-600);
+  box-shadow: var(--shadow-btn-hover);
+  transform: translateY(-1px);
+}
+
+button.primary:active { transform: translateY(0); }
+
+#save-status {
+  font-size: 12px;
+  color: var(--status-ok);
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#save-status:not(:empty) { opacity: 1; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--ink-100);
+  margin: 18px 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink-700);
+}
+
+.toggle-on, .toggle-off {
+  border: none;
+  padding: 6px 18px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  color: white;
+  min-width: 64px;
+  transition: all 0.12s ease;
+}
+
+.toggle-on  { background: var(--status-ok); }
+.toggle-on:hover  { background: #128a3d; }
+.toggle-off { background: var(--ink-400); }
+.toggle-off:hover { background: var(--ink-500); }
+
+.hint-block {
+  font-size: 12px;
+  color: var(--ink-500);
+  line-height: 1.55;
+}
+
+.hint-block p {
+  margin: 0 0 6px 0;
+  color: var(--ink-700);
+}
+
+.hint-block ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.hint-block li {
+  margin-bottom: 6px;
+}
+
+.hint-block li:last-child { margin-bottom: 0; }
+
+.hint-block strong {
+  color: var(--ink-900);
+  font-weight: 600;
+}
+
+.hint-block em {
+  color: var(--brand-600);
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* Domain details (collapsible list of ignored internal domains) */
+.domain-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--ink-100);
+  padding-top: 12px;
+}
+
+.domain-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-700);
+  padding: 4px 0;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.domain-details summary::before {
+  content: '▸';
+  font-size: 10px;
+  color: var(--ink-400);
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+.domain-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.domain-details summary::-webkit-details-marker { display: none; }
+
+.domain-details > p {
+  margin: 6px 0 8px 0;
+  font-size: 11px;
+  color: var(--ink-500);
+}
+
+.domain-list {
+  columns: 2;
+  column-gap: 16px;
+  padding-left: 16px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-500);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.domain-list li {
+  margin-bottom: 3px;
+  break-inside: avoid;
+  list-style: disc;
+}
+
+/* ========== Entrance animation ====================================== */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.section, .no-leads-banner {
+  animation: fade-in 0.18s cubic-bezier(0.2, 0, 0.2, 1);
+}
