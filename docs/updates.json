@@ -3,6 +3,15 @@
     "v4-contacts@snap-collective.com": {
       "updates": [
         {
+          "version": "1.17.0",
+          "update_link": "https://davidbenwow.github.io/v4-thunderbird-extension/releases/v4_contacts-1.17.0.xpi",
+          "applications": {
+            "gecko": {
+              "strict_min_version": "115.0"
+            }
+          }
+        },
+        {
           "version": "1.16.0",
           "update_link": "https://davidbenwow.github.io/v4-thunderbird-extension/releases/v4_contacts-1.16.0.xpi",
           "applications": {
