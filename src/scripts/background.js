@@ -761,9 +761,10 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
         const { enabled } = await getConfig();
         queueLen = enabled ? (await getQueue()).length : 0;
       } catch (e) { /* fall through to 0 — idle title */ }
-      if (queueLen === 1)      title = '1 lead still to mark in V4';
-      else if (queueLen > 1)   title = `${queueLen} leads still to mark in V4`;
-      else                     title = 'Nothing to mark in V4';
+      // Badge already carries the count — the tooltip should just describe
+      // what those items are, not repeat "N" next to the "N" on the badge.
+      if (queueLen > 0) title = 'Leads still unmarked';
+      else              title = 'Nothing to mark in V4';
     }
     await browser.messageDisplayAction.setTitle({ title, tabId });
   } catch (err) {
