@@ -163,7 +163,9 @@ pruneStaleDismissedEntries();
 // }> — newest first, de-duped by (headerMessageId, email), capped at QUEUE_CAP.
 const QUEUE_KEY    = 'queue:v1';
 const QUEUE_CAP    = 10;
-const QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
+// 10 days covers weekends and short vacations without letting the queue
+// drift into noise. The cap of 10 keeps memory/UI bounded regardless.
+const QUEUE_TTL_MS = 10 * 24 * 60 * 60 * 1000;
 
 // Single-key serialization (only one key, so one chained promise is enough).
 let queueWriteLock = Promise.resolve();
