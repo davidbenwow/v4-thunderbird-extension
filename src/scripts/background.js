@@ -79,6 +79,74 @@ async function pruneStaleOpenedEntries() {
 }
 pruneStaleOpenedEntries();
 
+// Persistent per-message "dismissed" state — mirrors opened:v1 in shape and
+// semantics. Populated by the Dismiss (✕) button on queue rows. Suppresses
+// re-enqueue on future scans so a dismissed match doesn't reappear after the
+// 5-min badge cache expires and the message is re-viewed. Kept separate from
+// opened:v1 because dismissal is NOT "user opened V4" — the popup's per-email
+// Mark button must not falsely read "Opened in browser" just because the user
+// dismissed a reminder.
+// Schema: `dismissed:v1:<headerMessageId>` -> { "email@x.com": unixMs, ... }
+const DISMISSED_KEY_PREFIX = 'dismissed:v1:';
+
+function dismissedKey(headerMessageId) {
+  return DISMISSED_KEY_PREFIX + headerMessageId;
+}
+
+async function getDismissed(headerMessageId) {
+  if (!headerMessageId) return {};
+  const key = dismissedKey(headerMessageId);
+  const result = await browser.storage.local.get(key);
+  return result[key] || {};
+}
+
+const dismissedWriteLocks = new Map();
+
+async function markDismissed(headerMessageId, email) {
+  if (!headerMessageId || !email) return;
+  const prev = dismissedWriteLocks.get(headerMessageId) || Promise.resolve();
+  const next = prev.catch(() => {}).then(async () => {
+    const key = dismissedKey(headerMessageId);
+    const result = await browser.storage.local.get(key);
+    const current = result[key] || {};
+    current[email.toLowerCase()] = Date.now();
+    await browser.storage.local.set({ [key]: current });
+  });
+  dismissedWriteLocks.set(headerMessageId, next);
+  next.finally(() => {
+    if (dismissedWriteLocks.get(headerMessageId) === next) {
+      dismissedWriteLocks.delete(headerMessageId);
+    }
+  }).catch(() => {});
+  return next;
+}
+
+// Startup prune of stale dismissed entries (same 6-month cutoff as opened).
+async function pruneStaleDismissedEntries() {
+  const CUTOFF_MS = 180 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - CUTOFF_MS;
+  try {
+    const all = await browser.storage.local.get(null);
+    const keysToDelete = [];
+    for (const [key, value] of Object.entries(all)) {
+      if (!key.startsWith(DISMISSED_KEY_PREFIX)) continue;
+      if (!value || typeof value !== 'object') { keysToDelete.push(key); continue; }
+      const timestamps = Object.values(value);
+      if (timestamps.length === 0 ||
+          timestamps.every(t => typeof t !== 'number' || t < cutoff)) {
+        keysToDelete.push(key);
+      }
+    }
+    if (keysToDelete.length) {
+      await browser.storage.local.remove(keysToDelete);
+      console.debug(`V4 Contacts: pruned ${keysToDelete.length} stale dismissed entries`);
+    }
+  } catch (err) {
+    console.debug('V4 Contacts: dismissed prune failed', err);
+  }
+}
+pruneStaleDismissedEntries();
+
 // --- Recent-matches queue ---------------------------------------------------
 // Persistent user-global queue of V4 matches the user has viewed but not
 // acted on. Drives the count badge on the toolbar icon AND the "Recent
@@ -198,6 +266,10 @@ async function removeFromQueue({ headerMessageId, email }) {
 // Updates the *global* (no-tabId) badge text to the queue length, or empty
 // when the extension is disabled / the queue is empty. Called after every
 // queue mutation (via storage.onChanged), after scans, and on startup.
+// Green (#16a34a) is deliberate — the orange ring on the active icon already
+// carries the "attention" signal, so using the same orange on the count
+// badge creates orange-on-orange visual noise. Green contrasts cleanly and
+// matches the popup's success palette (status-ok / "Opened in browser").
 async function refreshBadgeCount() {
   if (typeof browser.messageDisplayAction === 'undefined' ||
       typeof browser.messageDisplayAction.setBadgeText !== 'function') return;
@@ -208,11 +280,25 @@ async function refreshBadgeCount() {
       text: count > 0 ? String(count) : ''
     });
     if (typeof browser.messageDisplayAction.setBadgeBackgroundColor === 'function') {
-      await browser.messageDisplayAction.setBadgeBackgroundColor({ color: '#e7741b' });
+      await browser.messageDisplayAction.setBadgeBackgroundColor({ color: '#16a34a' });
     }
   } catch (err) {
     console.debug('refreshBadgeCount failed:', err && err.message);
   }
+}
+
+// Coalesces bursts of badge refreshes into a single call. Fast arrow-keying
+// through 10 matching messages fires onMessageDisplayed → enqueue →
+// storage.onChanged → refreshBadgeCount per message — that's 20+ refresh
+// calls per second, each doing a storage read for config + queue. Debounced
+// to 100ms so the user sees a single final count, not a thrash of writes.
+let refreshBadgeTimer = null;
+function scheduleBadgeRefresh() {
+  if (refreshBadgeTimer) return;
+  refreshBadgeTimer = setTimeout(() => {
+    refreshBadgeTimer = null;
+    refreshBadgeCount().catch(() => {});
+  }, 100);
 }
 
 // Hardcoded — this backend URL is constant for all users.
@@ -758,10 +844,14 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       return;
     }
 
-    // Load per-message opened state so already-actioned leads don't count
-    // toward the orange ring. If there's no headerMessageId (shouldn't happen
-    // for real messages), treat as empty.
-    const opened = await getOpened(headerMessageId);
+    // Load per-message opened + dismissed state so already-actioned / already-
+    // dismissed leads don't count toward the orange ring or re-enter the queue
+    // after cache expiry. If there's no headerMessageId (shouldn't happen for
+    // real messages), treat both as empty.
+    const [opened, dismissed] = await Promise.all([
+      getOpened(headerMessageId),
+      getDismissed(headerMessageId)
+    ]);
     if (!stillValid()) return;
 
     const results = result.results || {};
@@ -771,7 +861,7 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       const status = results[addr] ?? results[addr.toLowerCase()];
       if (status === 2 || status === 3) {
         const lower = addr.toLowerCase();
-        if (!opened[lower]) {
+        if (!opened[lower] && !dismissed[lower]) {
           leadCount++;
           if (headerMessageId) {
             toEnqueue.push({ headerMessageId, email: lower, status });
@@ -805,8 +895,8 @@ if (hasBadgeAPI && browser.messageDisplay && browser.messageDisplay.onMessageDis
   browser.messageDisplay.onMessageDisplayed.addListener(async (tab, msgHeader) => {
     await scanAndBadgeMessage(tab, msgHeader);
     // Reassert queue-count badge in case scan was a cache hit, disabled, or
-    // short-circuited — the global count should always reflect persisted state.
-    refreshBadgeCount().catch(() => {});
+    // short-circuited. Debounced so fast arrow-key navigation doesn't thrash.
+    scheduleBadgeRefresh();
   });
 }
 
@@ -822,11 +912,12 @@ browser.tabs.onActivated.addListener(async ({ tabId }) => {
       await updateBadgeForTab(tabId, 0);
     }
   } catch (err) { /* not a message tab — ignore */ }
-  refreshBadgeCount().catch(() => {});
+  scheduleBadgeRefresh();
 });
 
 // Refresh badge once at startup so restart-persisted queue is reflected
-// on the toolbar before the user touches anything.
+// on the toolbar before the user touches anything. Immediate (not debounced)
+// because this is a one-shot on script load.
 if (hasBadgeAPI) refreshBadgeCount().catch(() => {});
 
 // Clean up tab-generation tracking when tabs close
@@ -869,7 +960,7 @@ if (browser.windows && browser.windows.onFocusChanged) {
 // the per-message scan cache.
 browser.storage.onChanged.addListener(async (changes) => {
   if (QUEUE_KEY in changes) {
-    refreshBadgeCount().catch(() => {});
+    scheduleBadgeRefresh();
   }
 
   const settingsKeys = [STORAGE_KEYS.API_KEY, STORAGE_KEYS.ENABLED];
@@ -890,7 +981,7 @@ browser.storage.onChanged.addListener(async (changes) => {
     }
   } catch (e) { /* no active message tab — ignore */ }
   // Enabled/disabled flip must reflect on the queue badge too.
-  refreshBadgeCount().catch(() => {});
+  scheduleBadgeRefresh();
 });
 
 // --- Message router ---------------------------------------------------------
@@ -912,15 +1003,26 @@ browser.runtime.onMessage.addListener((message) => {
         return Promise.resolve({ error: 'bad_args' });
       }
       return syncBadgeFromPopup(message.tabId, message.headerMessageId, message.count);
-    // Recent-matches queue: read and individual remove. The badge updates
+    // Recent-matches queue: read and user-dismiss. The badge updates
     // automatically via storage.onChanged after any mutation.
     case 'getQueue':
       return getQueue().then(queue => ({ queue }));
+    // Legacy / internal-style: just remove an entry without marking dismissed.
+    // The popup uses 'dismissFromQueue' for user-initiated dismissal so the
+    // same row doesn't re-enter after the 5-min badge cache expires.
     case 'removeFromQueue':
       return removeFromQueue({
         headerMessageId: message.headerMessageId,
         email: message.email
       }).then(() => getQueue()).then(queue => ({ queue }));
+    case 'dismissFromQueue':
+      return markDismissed(message.headerMessageId, message.email)
+        .then(() => removeFromQueue({
+          headerMessageId: message.headerMessageId,
+          email: message.email
+        }))
+        .then(() => getQueue())
+        .then(queue => ({ queue }));
     default:                          return Promise.resolve({ error: 'unknown_method' });
   }
 });

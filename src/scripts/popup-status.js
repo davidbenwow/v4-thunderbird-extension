@@ -224,8 +224,11 @@
       const email = dismissBtn.dataset.email;
       const headerMessageId = dismissBtn.dataset.headerMessageId;
       try {
+        // dismissFromQueue (vs. removeFromQueue) also writes dismissed:v1
+        // state so the same match doesn't re-enter the queue after the
+        // 5-min scan cache expires and the user re-views the message.
         await browser.runtime.sendMessage({
-          method: 'removeFromQueue',
+          method: 'dismissFromQueue',
           email,
           headerMessageId
         });
