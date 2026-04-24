@@ -176,7 +176,7 @@
     }
 
     ui.queueSection.classList.remove('hidden');
-    ui.queueSection.appendChild(makeSectionHeader('Recent matches'));
+    ui.queueSection.appendChild(makeSectionHeader('Still to mark in V4 👇'));
     for (const entry of queue) {
       ui.queueSection.appendChild(makeQueueRow(entry));
     }
