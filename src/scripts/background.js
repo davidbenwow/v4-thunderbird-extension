@@ -79,6 +79,142 @@ async function pruneStaleOpenedEntries() {
 }
 pruneStaleOpenedEntries();
 
+// --- Recent-matches queue ---------------------------------------------------
+// Persistent user-global queue of V4 matches the user has viewed but not
+// acted on. Drives the count badge on the toolbar icon AND the "Recent
+// matches" list in the popup. Cap + TTL keep it from growing unbounded;
+// user-driven removal (Mark / Dismiss) + out-of-band markOpened clear entries.
+//
+// Schema: `queue:v1` -> Array<{
+//   headerMessageId: string,   // RFC Message-ID of the email the match was seen in
+//   email: string,             // lowercased lead email
+//   status: 2 | 3,             // V4 status code at last sighting (used/pending)
+//   subject: string,           // email subject, truncated to 200 chars
+//   firstSeen: number,         // Date.now() of first enqueue — drives TTL
+//   lastSeen: number           // Date.now() of most recent sighting
+// }> — newest first, de-duped by (headerMessageId, email), capped at QUEUE_CAP.
+const QUEUE_KEY    = 'queue:v1';
+const QUEUE_CAP    = 10;
+const QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Single-key serialization (only one key, so one chained promise is enough).
+let queueWriteLock = Promise.resolve();
+function runUnderQueueLock(fn) {
+  const prev = queueWriteLock.catch(() => {});
+  const next = prev.then(fn);
+  // Swallow errors on the lock chain so one failure doesn't wedge later writes.
+  queueWriteLock = next.catch(() => {});
+  return next;
+}
+
+function pruneQueue(list) {
+  if (!Array.isArray(list)) return [];
+  const cutoff = Date.now() - QUEUE_TTL_MS;
+  return list.filter(e =>
+    e && typeof e === 'object' &&
+    typeof e.firstSeen === 'number' &&
+    e.firstSeen >= cutoff
+  );
+}
+
+async function readQueueRaw() {
+  const r = await browser.storage.local.get(QUEUE_KEY);
+  const raw = r[QUEUE_KEY];
+  return Array.isArray(raw) ? raw : [];
+}
+
+// Read, prune, opportunistically write back if pruning changed anything.
+async function getQueue() {
+  return runUnderQueueLock(async () => {
+    const raw = await readQueueRaw();
+    const pruned = pruneQueue(raw);
+    if (pruned.length !== raw.length) {
+      await browser.storage.local.set({ [QUEUE_KEY]: pruned });
+    }
+    return pruned;
+  });
+}
+
+// Merge a batch of match entries into the queue under a single lock+write.
+// Called once per scan so N matches in one message = 1 storage write.
+async function enqueueMatchBatch(entries, msgHeader) {
+  if (!Array.isArray(entries) || entries.length === 0) return;
+  const now = Date.now();
+  const subject = (msgHeader && typeof msgHeader.subject === 'string')
+    ? msgHeader.subject.slice(0, 200)
+    : '';
+  return runUnderQueueLock(async () => {
+    const list = pruneQueue(await readQueueRaw());
+    let changed = false;
+    for (const entry of entries) {
+      if (!entry || !entry.headerMessageId || !entry.email) continue;
+      const email = String(entry.email).toLowerCase();
+      const status = entry.status;
+      const existingIdx = list.findIndex(e =>
+        e && e.headerMessageId === entry.headerMessageId && e.email === email
+      );
+      if (existingIdx !== -1) {
+        list[existingIdx].lastSeen = now;
+        list[existingIdx].status = status;
+        // Preserve firstSeen / ordering — "newest first" means newest discovery,
+        // not newest sighting. Re-seeing doesn't bump you to the top.
+        changed = true;
+      } else {
+        list.unshift({
+          headerMessageId: entry.headerMessageId,
+          email,
+          status,
+          subject,
+          firstSeen: now,
+          lastSeen: now
+        });
+        changed = true;
+      }
+    }
+    if (list.length > QUEUE_CAP) {
+      list.length = QUEUE_CAP;
+      changed = true;
+    }
+    if (changed) {
+      await browser.storage.local.set({ [QUEUE_KEY]: list });
+    }
+  });
+}
+
+async function removeFromQueue({ headerMessageId, email }) {
+  if (!headerMessageId || !email) return;
+  const needle = String(email).toLowerCase();
+  return runUnderQueueLock(async () => {
+    const raw = await readQueueRaw();
+    const filtered = raw.filter(e =>
+      !(e && e.headerMessageId === headerMessageId && e.email === needle)
+    );
+    if (filtered.length !== raw.length) {
+      await browser.storage.local.set({ [QUEUE_KEY]: filtered });
+    }
+  });
+}
+
+// Updates the *global* (no-tabId) badge text to the queue length, or empty
+// when the extension is disabled / the queue is empty. Called after every
+// queue mutation (via storage.onChanged), after scans, and on startup.
+async function refreshBadgeCount() {
+  if (typeof browser.messageDisplayAction === 'undefined' ||
+      typeof browser.messageDisplayAction.setBadgeText !== 'function') return;
+  try {
+    const { enabled } = await getConfig();
+    const count = enabled ? (await getQueue()).length : 0;
+    await browser.messageDisplayAction.setBadgeText({
+      text: count > 0 ? String(count) : ''
+    });
+    if (typeof browser.messageDisplayAction.setBadgeBackgroundColor === 'function') {
+      await browser.messageDisplayAction.setBadgeBackgroundColor({ color: '#e7741b' });
+    }
+  } catch (err) {
+    console.debug('refreshBadgeCount failed:', err && err.message);
+  }
+}
+
 // Hardcoded — this backend URL is constant for all users.
 const API_URL = 'https://v4.vdm-vsg.de';
 
@@ -427,6 +563,13 @@ async function openInV4(email, headerMessageId) {
     } catch (e) {
       console.warn('markOpened failed:', e);
     }
+    // Also drop this match from the recent-matches queue. The subsequent
+    // storage.onChanged fires refreshBadgeCount so the badge decrements.
+    try {
+      await removeFromQueue({ headerMessageId, email });
+    } catch (e) {
+      console.debug('removeFromQueue failed:', e);
+    }
   }
 
   // Kick off an icon refresh for the currently displayed message without
@@ -485,9 +628,10 @@ function invalidateAllCache() {
 
 async function updateBadgeForTab(tabId, count, opts = {}) {
   try {
-    // We never use badge text anymore — instead we swap between the default
-    // icon and the "active" (orange-ringed) icon to indicate state.
-    await browser.messageDisplayAction.setBadgeText({ text: '', tabId });
+    // This function owns the ICON swap (active ring vs. default) for the
+    // current message's per-message state. Badge TEXT is managed globally by
+    // refreshBadgeCount() from the queue; setting per-tab badge text here
+    // would create a per-tab override that masks the global queue count.
 
     const useActive = count > 0;
 
@@ -622,10 +766,17 @@ async function scanAndBadgeMessage(tab, msgHeader) {
 
     const results = result.results || {};
     let leadCount = 0;
+    const toEnqueue = [];
     for (const addr of addresses) {
       const status = results[addr] ?? results[addr.toLowerCase()];
       if (status === 2 || status === 3) {
-        if (!opened[addr.toLowerCase()]) leadCount++;
+        const lower = addr.toLowerCase();
+        if (!opened[lower]) {
+          leadCount++;
+          if (headerMessageId) {
+            toEnqueue.push({ headerMessageId, email: lower, status });
+          }
+        }
       }
     }
 
@@ -633,6 +784,10 @@ async function scanAndBadgeMessage(tab, msgHeader) {
 
     if (stillValid()) {
       await updateBadgeForTab(tab.id, leadCount);
+      if (toEnqueue.length > 0) {
+        try { await enqueueMatchBatch(toEnqueue, msgHeader); }
+        catch (e) { console.debug('enqueueMatchBatch failed:', e); }
+      }
     }
   } catch (err) {
     console.error('scanAndBadgeMessage error:', err);
@@ -649,6 +804,9 @@ const hasBadgeAPI = typeof browser.messageDisplayAction !== 'undefined'
 if (hasBadgeAPI && browser.messageDisplay && browser.messageDisplay.onMessageDisplayed) {
   browser.messageDisplay.onMessageDisplayed.addListener(async (tab, msgHeader) => {
     await scanAndBadgeMessage(tab, msgHeader);
+    // Reassert queue-count badge in case scan was a cache hit, disabled, or
+    // short-circuited — the global count should always reflect persisted state.
+    refreshBadgeCount().catch(() => {});
   });
 }
 
@@ -664,7 +822,12 @@ browser.tabs.onActivated.addListener(async ({ tabId }) => {
       await updateBadgeForTab(tabId, 0);
     }
   } catch (err) { /* not a message tab — ignore */ }
+  refreshBadgeCount().catch(() => {});
 });
+
+// Refresh badge once at startup so restart-persisted queue is reflected
+// on the toolbar before the user touches anything.
+if (hasBadgeAPI) refreshBadgeCount().catch(() => {});
 
 // Clean up tab-generation tracking when tabs close
 browser.tabs.onRemoved.addListener((tabId) => {
@@ -701,8 +864,14 @@ if (browser.windows && browser.windows.onFocusChanged) {
 
 // React to settings changes only — ignore opened-state writes that happen
 // on every Mark click (otherwise we'd trigger a full rescan + cache wipe
-// every time the user presses the button).
+// every time the user presses the button). Queue changes are additive:
+// they refresh the badge count but do NOT bump configGen or invalidate
+// the per-message scan cache.
 browser.storage.onChanged.addListener(async (changes) => {
+  if (QUEUE_KEY in changes) {
+    refreshBadgeCount().catch(() => {});
+  }
+
   const settingsKeys = [STORAGE_KEYS.API_KEY, STORAGE_KEYS.ENABLED];
   const settingsChanged = settingsKeys.some(k => k in changes);
   if (!settingsChanged) return;
@@ -720,6 +889,8 @@ browser.storage.onChanged.addListener(async (changes) => {
       await updateBadgeForTab(activeTab.id, 0);
     }
   } catch (e) { /* no active message tab — ignore */ }
+  // Enabled/disabled flip must reflect on the queue badge too.
+  refreshBadgeCount().catch(() => {});
 });
 
 // --- Message router ---------------------------------------------------------
@@ -741,6 +912,15 @@ browser.runtime.onMessage.addListener((message) => {
         return Promise.resolve({ error: 'bad_args' });
       }
       return syncBadgeFromPopup(message.tabId, message.headerMessageId, message.count);
+    // Recent-matches queue: read and individual remove. The badge updates
+    // automatically via storage.onChanged after any mutation.
+    case 'getQueue':
+      return getQueue().then(queue => ({ queue }));
+    case 'removeFromQueue':
+      return removeFromQueue({
+        headerMessageId: message.headerMessageId,
+        email: message.email
+      }).then(() => getQueue()).then(queue => ({ queue }));
     default:                          return Promise.resolve({ error: 'unknown_method' });
   }
 });
