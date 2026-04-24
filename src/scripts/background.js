@@ -298,6 +298,10 @@ function scheduleBadgeRefresh() {
   refreshBadgeTimer = setTimeout(() => {
     refreshBadgeTimer = null;
     refreshBadgeCount().catch(() => {});
+    // Also re-sync the active tab's TITLE — queue mutations change the
+    // tooltip wording ("Nothing to mark" → "N leads still to mark" and vice
+    // versa) and must be reflected without waiting for the next scan.
+    refreshActiveTabTitle().catch(() => {});
   }, 100);
 }
 
@@ -731,10 +735,6 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
         },
         tabId
       });
-      await browser.messageDisplayAction.setTitle({
-        title: 'Mark Lead in V4',
-        tabId
-      });
     } else {
       await browser.messageDisplayAction.setIcon({
         path: {
@@ -745,22 +745,46 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
         },
         tabId
       });
-      if (opts.showAlert) {
-        await browser.messageDisplayAction.setTitle({
-          title: 'V4 Contacts — not configured. Open preferences to set up.',
-          tabId
-        });
-      } else {
-        await browser.messageDisplayAction.setTitle({
-          title: 'Nothing to mark in V4',
-          tabId
-        });
-      }
     }
+
+    // Title composition — considers BOTH per-message match state AND global
+    // queue state. Without this, the tooltip would say "Nothing to mark in
+    // V4" while the badge counts queued matches, contradicting itself.
+    let title;
+    if (opts.showAlert) {
+      title = 'V4 Contacts — not configured. Open preferences to set up.';
+    } else if (useActive) {
+      title = 'Mark Lead in V4';
+    } else {
+      let queueLen = 0;
+      try {
+        const { enabled } = await getConfig();
+        queueLen = enabled ? (await getQueue()).length : 0;
+      } catch (e) { /* fall through to 0 — idle title */ }
+      if (queueLen === 1)      title = '1 lead still to mark in V4';
+      else if (queueLen > 1)   title = `${queueLen} leads still to mark in V4`;
+      else                     title = 'Nothing to mark in V4';
+    }
+    await browser.messageDisplayAction.setTitle({ title, tabId });
   } catch (err) {
     // Tab may have closed, or API may not exist on older Thunderbird builds
     console.debug('Badge update failed:', err && err.message);
   }
+}
+
+// Refresh the active tab's title after a queue mutation. The title depends
+// on queue length AND current-message match state; we use the cached per-
+// message count (populated by scanAndBadgeMessage) instead of re-scanning.
+async function refreshActiveTabTitle() {
+  if (typeof browser.messageDisplayAction === 'undefined') return;
+  try {
+    const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab) return;
+    const msgHeader = await browser.messageDisplay.getDisplayedMessage(activeTab.id).catch(() => null);
+    if (!msgHeader) return;
+    const cachedCount = getCachedCount(cacheKey(msgHeader));
+    await updateBadgeForTab(activeTab.id, cachedCount || 0);
+  } catch (e) { /* best effort — title will self-correct on next scan */ }
 }
 
 // Validated entry point for the popup to update a tab's icon. Rejects writes

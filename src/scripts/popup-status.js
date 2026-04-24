@@ -35,13 +35,26 @@
 
   function show(stateKey) {
     const keys = ['loading', 'notConfigured', 'disabled', 'error', 'empty', 'noLeads', 'results'];
-    if (!keys.includes(stateKey)) {
+    // 'none' is a special sentinel meaning "hide all state-* banners" — used
+    // when the queue has pending entries so the queue becomes the sole
+    // content, avoiding contradictions like "Nothing to check" above
+    // "Still to mark in V4".
+    if (stateKey !== 'none' && !keys.includes(stateKey)) {
       console.error('V4 Contacts: unknown state', stateKey);
       return;
     }
     for (const key of keys) {
       ui[key].classList.toggle('hidden', key !== stateKey);
     }
+  }
+
+  // Ask the background for queue length without rendering it. Used to decide
+  // whether to show state banners or suppress them in favor of queue-only UI.
+  async function fetchQueueLen() {
+    try {
+      const r = await browser.runtime.sendMessage({ method: 'getQueue' });
+      return (r && Array.isArray(r.queue)) ? r.queue.length : 0;
+    } catch (e) { return 0; }
   }
 
   function el(tag, className, textContent) {
@@ -301,7 +314,10 @@
       return;
     }
     if (!emails || !emails.length) {
-      show('empty');
+      // Suppress "Nothing to check" when the queue has pending entries —
+      // the queue IS the content; the banner would contradict it.
+      const queueLen = await fetchQueueLen();
+      show(queueLen > 0 ? 'none' : 'empty');
       return;
     }
 
@@ -352,7 +368,10 @@
     }).catch(() => { /* best effort */ });
 
     if (leads.length === 0) {
-      show('noLeads');
+      // Same rule as 'empty': if the queue has pending entries, don't
+      // distract with "Nothing to mark in V4" above them.
+      const queueLen = await fetchQueueLen();
+      show(queueLen > 0 ? 'none' : 'noLeads');
       return;
     }
 
