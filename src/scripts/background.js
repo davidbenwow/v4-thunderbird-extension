@@ -763,7 +763,7 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
       } catch (e) { /* fall through to 0 — idle title */ }
       // Badge already carries the count — the tooltip should just describe
       // what those items are, not repeat "N" next to the "N" on the badge.
-      if (queueLen > 0) title = 'Leads still unmarked';
+      if (queueLen > 0) title = 'Leads still to mark';
       else              title = 'Nothing to mark in V4';
     }
     await browser.messageDisplayAction.setTitle({ title, tabId });
