@@ -147,6 +147,167 @@ async function pruneStaleDismissedEntries() {
 }
 pruneStaleDismissedEntries();
 
+// Persistent per-EMAIL "marked" state. Tracks that the user has clicked
+// Mark in V4 for this lead at least once, regardless of which message
+// triggered the click. Unlike opened:v1 (per-message-id) and dismissed:v1
+// (per-message-id), this state survives across new messages from the same
+// lead. Used by the scan loop to suppress re-queuing routine follow-up
+// emails from leads the user has already actioned in V4.
+//
+// The suppression is OVERRIDDEN when a new message arrives with a manuscript
+// signal (.docx / .doc / .pdf attachment, or a known file-transfer URL):
+// the lead re-enters the queue so the user can mark "Manuscript received".
+//
+// Schema: `marked:v1:<email>` -> { lastMarkedAt: <unixMs> }
+const MARKED_KEY_PREFIX = 'marked:v1:';
+
+function markedKey(email) {
+  return MARKED_KEY_PREFIX + String(email).toLowerCase();
+}
+
+// Batch-fetch marked state for many emails in one storage read.
+// Returns { lowercasedEmail: entry } — present iff marked.
+async function getMarkedFor(addresses) {
+  const out = {};
+  if (!addresses || !addresses.length) return out;
+  const keys = [];
+  const indexByKey = new Map();
+  for (const addr of addresses) {
+    const lower = String(addr).toLowerCase();
+    const key = markedKey(lower);
+    keys.push(key);
+    indexByKey.set(key, lower);
+  }
+  try {
+    const result = await browser.storage.local.get(keys);
+    for (const [key, value] of Object.entries(result)) {
+      const lower = indexByKey.get(key);
+      if (lower && value && typeof value === 'object') out[lower] = value;
+    }
+  } catch (e) { /* fall through to empty */ }
+  return out;
+}
+
+// Per-email write serialization (mirrors openedWriteLocks pattern).
+const markedWriteLocks = new Map();
+
+async function markEmail(email) {
+  if (!email) return;
+  const lower = String(email).toLowerCase();
+  const prev = markedWriteLocks.get(lower) || Promise.resolve();
+  const next = prev.catch(() => {}).then(async () => {
+    const key = markedKey(lower);
+    await browser.storage.local.set({ [key]: { lastMarkedAt: Date.now() } });
+  });
+  markedWriteLocks.set(lower, next);
+  next.finally(() => {
+    if (markedWriteLocks.get(lower) === next) {
+      markedWriteLocks.delete(lower);
+    }
+  }).catch(() => {});
+  return next;
+}
+
+// Startup prune: drop marked entries older than 365 days. Allows a lead to
+// resurface after a year of silence without manual cleanup.
+async function pruneStaleMarkedEntries() {
+  const CUTOFF_MS = 365 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - CUTOFF_MS;
+  try {
+    const all = await browser.storage.local.get(null);
+    const keysToDelete = [];
+    for (const [key, value] of Object.entries(all)) {
+      if (!key.startsWith(MARKED_KEY_PREFIX)) continue;
+      if (!value || typeof value !== 'object') { keysToDelete.push(key); continue; }
+      const ts = value.lastMarkedAt;
+      if (typeof ts !== 'number' || ts < cutoff) keysToDelete.push(key);
+    }
+    if (keysToDelete.length) {
+      await browser.storage.local.remove(keysToDelete);
+      console.debug(`V4 Contacts: pruned ${keysToDelete.length} stale marked entries`);
+    }
+  } catch (err) {
+    console.debug('V4 Contacts: marked prune failed', err);
+  }
+}
+pruneStaleMarkedEntries();
+
+// Persistent per-EMAIL TERMINAL state — written when the user clicks Mark
+// on a queue row that surfaced because of a manuscript signal. Semantics:
+// "this lead is done; never queue them again." The publishing workflow ends
+// at 'Manuscript received'; future emails from this person should not bother
+// the user.
+//
+// Schema: `markedTerminal:v1:<email>` -> { markedAt: <unixMs>, reason: 'manuscript' }
+const TERMINAL_KEY_PREFIX = 'markedTerminal:v1:';
+
+function terminalKey(email) {
+  return TERMINAL_KEY_PREFIX + String(email).toLowerCase();
+}
+
+async function getTerminalFor(addresses) {
+  const out = {};
+  if (!addresses || !addresses.length) return out;
+  const keys = [];
+  const indexByKey = new Map();
+  for (const addr of addresses) {
+    const lower = String(addr).toLowerCase();
+    const key = terminalKey(lower);
+    keys.push(key);
+    indexByKey.set(key, lower);
+  }
+  try {
+    const result = await browser.storage.local.get(keys);
+    for (const [key, value] of Object.entries(result)) {
+      const lower = indexByKey.get(key);
+      if (lower && value && typeof value === 'object') out[lower] = value;
+    }
+  } catch (e) { /* fall through to empty */ }
+  return out;
+}
+
+const terminalWriteLocks = new Map();
+
+async function markEmailTerminal(email) {
+  if (!email) return;
+  const lower = String(email).toLowerCase();
+  const prev = terminalWriteLocks.get(lower) || Promise.resolve();
+  const next = prev.catch(() => {}).then(async () => {
+    const key = terminalKey(lower);
+    await browser.storage.local.set({ [key]: { markedAt: Date.now(), reason: 'manuscript' } });
+  });
+  terminalWriteLocks.set(lower, next);
+  next.finally(() => {
+    if (terminalWriteLocks.get(lower) === next) {
+      terminalWriteLocks.delete(lower);
+    }
+  }).catch(() => {});
+  return next;
+}
+
+// Terminal entries are effectively forever, but bound at 5 years for storage hygiene.
+async function pruneStaleTerminalEntries() {
+  const CUTOFF_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - CUTOFF_MS;
+  try {
+    const all = await browser.storage.local.get(null);
+    const keysToDelete = [];
+    for (const [key, value] of Object.entries(all)) {
+      if (!key.startsWith(TERMINAL_KEY_PREFIX)) continue;
+      if (!value || typeof value !== 'object') { keysToDelete.push(key); continue; }
+      const ts = value.markedAt;
+      if (typeof ts !== 'number' || ts < cutoff) keysToDelete.push(key);
+    }
+    if (keysToDelete.length) {
+      await browser.storage.local.remove(keysToDelete);
+      console.debug(`V4 Contacts: pruned ${keysToDelete.length} stale terminal entries`);
+    }
+  } catch (err) {
+    console.debug('V4 Contacts: terminal prune failed', err);
+  }
+}
+pruneStaleTerminalEntries();
+
 // --- Recent-matches queue ---------------------------------------------------
 // Persistent user-global queue of V4 matches the user has viewed but not
 // acted on. Drives the count badge on the toolbar icon AND the "Recent
@@ -207,6 +368,13 @@ async function getQueue() {
 
 // Merge a batch of match entries into the queue under a single lock+write.
 // Called once per scan so N matches in one message = 1 storage write.
+//
+// Dedup is GLOBAL by email (not per-message-id): one queue row per lead,
+// regardless of how many of their messages have been viewed. On collision,
+// the latest sighting wins for headerMessageId / subject / lastSeen / status
+// / manuscriptSignal. firstSeen and ordering are preserved so newest-first
+// means newest discovery, not newest sighting (re-sighting doesn't bump
+// you to the top of a 10-cap list).
 async function enqueueMatchBatch(entries, msgHeader) {
   if (!Array.isArray(entries) || entries.length === 0) return;
   const now = Date.now();
@@ -220,14 +388,14 @@ async function enqueueMatchBatch(entries, msgHeader) {
       if (!entry || !entry.headerMessageId || !entry.email) continue;
       const email = String(entry.email).toLowerCase();
       const status = entry.status;
-      const existingIdx = list.findIndex(e =>
-        e && e.headerMessageId === entry.headerMessageId && e.email === email
-      );
+      const manuscriptSignal = entry.manuscriptSignal || null;
+      const existingIdx = list.findIndex(e => e && e.email === email);
       if (existingIdx !== -1) {
-        list[existingIdx].lastSeen = now;
-        list[existingIdx].status = status;
-        // Preserve firstSeen / ordering — "newest first" means newest discovery,
-        // not newest sighting. Re-seeing doesn't bump you to the top.
+        list[existingIdx].headerMessageId  = entry.headerMessageId;
+        list[existingIdx].subject          = subject;
+        list[existingIdx].lastSeen         = now;
+        list[existingIdx].status           = status;
+        list[existingIdx].manuscriptSignal = manuscriptSignal;
         changed = true;
       } else {
         list.unshift({
@@ -236,7 +404,8 @@ async function enqueueMatchBatch(entries, msgHeader) {
           status,
           subject,
           firstSeen: now,
-          lastSeen: now
+          lastSeen: now,
+          manuscriptSignal
         });
         changed = true;
       }
@@ -251,14 +420,14 @@ async function enqueueMatchBatch(entries, msgHeader) {
   });
 }
 
-async function removeFromQueue({ headerMessageId, email }) {
-  if (!headerMessageId || !email) return;
+// Remove the queue entry for a given email. Filters by email only — the
+// queue dedupes globally by email, so there's at most one entry per lead.
+async function removeFromQueue({ email }) {
+  if (!email) return;
   const needle = String(email).toLowerCase();
   return runUnderQueueLock(async () => {
     const raw = await readQueueRaw();
-    const filtered = raw.filter(e =>
-      !(e && e.headerMessageId === headerMessageId && e.email === needle)
-    );
+    const filtered = raw.filter(e => !(e && e.email === needle));
     if (filtered.length !== raw.length) {
       await browser.storage.local.set({ [QUEUE_KEY]: filtered });
     }
@@ -423,6 +592,99 @@ function stripHtmlTags(s) {
   return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 }
 
+// --- Manuscript signal detection --------------------------------------------
+// File-transfer services commonly used by authors to send manuscripts when
+// the file is too large for direct attachment. A URL whose hostname matches
+// (or is a subdomain of) any of these is treated as a "manuscript signal"
+// alongside .docx/.doc/.pdf attachments. The list is conservative — generic
+// CDN domains (icloud.com, firebaseapp.com, etc.) are excluded to avoid
+// false positives from email signatures, calendar invites, and unrelated
+// content. Easy to extend.
+const MANUSCRIPT_TRANSFER_HOSTS = new Set([
+  'wetransfer.com', 'we.tl',
+  'drive.google.com', 'docs.google.com',
+  'dropbox.com', 'db.tt',
+  '1drv.ms', 'onedrive.live.com', 'sharepoint.com',
+  'swisstransfer.com',
+  'transfernow.net',
+  'smash.com', 'fromsmash.com',
+  'filemail.com',
+  'mega.nz', 'mega.io',
+  'box.com', 'app.box.com',
+  'pcloud.com', 'pc.cd',
+  'mediafire.com',
+  'jumbomail.me'
+]);
+
+const MANUSCRIPT_EXTENSIONS = ['.docx', '.doc', '.pdf'];
+
+function hasManuscriptExtension(name) {
+  if (!name || typeof name !== 'string') return false;
+  const lower = name.toLowerCase();
+  return MANUSCRIPT_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
+// URL extraction over plaintext. The body has already been HTML-stripped by
+// stripHtmlTags by the time this is called, so any href values appear as
+// bare URL tokens. Lazy regex (no global flag); loop with .exec instead of
+// .matchAll for back-compat with older JS engines. We capture host only.
+const URL_REGEX = /https?:\/\/([A-Za-z0-9._\-]+\.[A-Za-z]{2,})(?:[\/\?\#][^\s)]*)?/gi;
+
+function extractTransferLinkHost(text) {
+  if (!text) return null;
+  URL_REGEX.lastIndex = 0;
+  let m;
+  while ((m = URL_REGEX.exec(text)) !== null) {
+    const host = m[1].toLowerCase();
+    if (MANUSCRIPT_TRANSFER_HOSTS.has(host)) return host;
+    // Also match subdomains (e.g. share.dropbox.com → dropbox.com).
+    const parts = host.split('.');
+    for (let i = 1; i < parts.length - 1; i++) {
+      const candidate = parts.slice(i).join('.');
+      if (MANUSCRIPT_TRANSFER_HOSTS.has(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// Inspect a message for "manuscript arrived" signals: any attachment with a
+// .docx/.doc/.pdf filename, OR a URL in the body whose host is on the
+// transfer-services allow-list. Returns a stable result object the caller
+// can attach to queue entries (drives the 📄 indicator and terminal-mark UX).
+async function detectManuscriptSignal(msgHeader) {
+  const empty = { has: false, type: null, detail: null };
+  if (!msgHeader || msgHeader.id == null) return empty;
+
+  // Attachments first — usually faster than re-reading the body.
+  try {
+    if (browser.messages && browser.messages.listAttachments) {
+      const attachments = await browser.messages.listAttachments(msgHeader.id);
+      if (Array.isArray(attachments)) {
+        for (const att of attachments) {
+          if (att && hasManuscriptExtension(att.name)) {
+            return { has: true, type: 'attachment', detail: att.name };
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Non-fatal — listAttachments can throw on certain message types
+    // (drafts, queued sends, etc.). Fall through to body scan.
+  }
+
+  // Body URL scan — re-uses the existing MIME walk + HTML strip path.
+  try {
+    const full = await browser.messages.getFull(msgHeader.id);
+    const bodyText = collectBodyText(full);
+    const host = extractTransferLinkHost(bodyText);
+    if (host) {
+      return { has: true, type: 'link', detail: host };
+    }
+  } catch (e) { /* body unreadable — give up */ }
+
+  return empty;
+}
+
 // --- Displayed-message email gathering --------------------------------------
 // Returns: { emails: [{address, source}], headerMessageId }
 // source ∈ { 'sender', 'recipient', 'cc', 'bcc', 'body' }
@@ -479,7 +741,14 @@ async function extractEmailsFromMessage(msgHeader) {
 async function getDisplayedMessageEmails(tabId) {
   const msgHeader = await browser.messageDisplay.getDisplayedMessage(tabId);
   if (!msgHeader) return { emails: [] };
-  return extractEmailsFromMessage(msgHeader);
+  const result = await extractEmailsFromMessage(msgHeader);
+  // Also detect manuscript signal so the popup can switch the per-message
+  // Mark button to "Manuscript received" without a second IPC roundtrip.
+  try {
+    const sig = await detectManuscriptSignal(msgHeader);
+    if (sig && sig.has) result.manuscriptSignal = sig;
+  } catch (e) { /* best effort */ }
+  return result;
 }
 
 // --- Compose window recipients ----------------------------------------------
@@ -639,7 +908,11 @@ async function getComposeEmails(tabId) {
 }
 
 // --- Open lead search in V4 -------------------------------------------------
-async function openInV4(email, headerMessageId) {
+// `terminal: true` is set when the user marks via a row that surfaced
+// because of a manuscript signal — semantically "Manuscript received",
+// the end of the marking lifecycle for this lead. Writes markedTerminal:v1
+// in addition to the regular per-email marked:v1.
+async function openInV4(email, headerMessageId, terminal = false) {
   const url = `${API_URL}/system/lead/find?search_query=${encodeURIComponent(email)}`;
 
   // Dispatch to browser FIRST. If this rejects, we don't persist opened state —
@@ -647,21 +920,30 @@ async function openInV4(email, headerMessageId) {
   // opened even though the user never reached V4.
   await browser.windows.openDefaultBrowser(url);
 
-  // Only after successful dispatch: persist opened state so the UI reflects
-  // the action across popup reopens and Thunderbird restarts.
+  // Per-message-id "opened" state — drives the per-message popup button label.
   if (headerMessageId && email) {
     try {
       await markOpened(headerMessageId, email);
     } catch (e) {
       console.warn('markOpened failed:', e);
     }
-    // Also drop this match from the recent-matches queue. The subsequent
-    // storage.onChanged fires refreshBadgeCount so the badge decrements.
-    try {
-      await removeFromQueue({ headerMessageId, email });
-    } catch (e) {
-      console.debug('removeFromQueue failed:', e);
+  }
+  // Per-EMAIL "marked" state — written on every Mark click so future scans
+  // suppress this lead unless a manuscript signal arrives. Independent of
+  // headerMessageId, so it survives across new messages from the same person.
+  if (email) {
+    try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
+    if (terminal) {
+      try { await markEmailTerminal(email); }
+      catch (e) { console.debug('markEmailTerminal failed:', e); }
     }
+  }
+  // Drop this match from the recent-matches queue. Filtered by email only
+  // (queue dedupes globally by email). storage.onChanged → refreshBadgeCount
+  // decrements the badge.
+  if (email) {
+    try { await removeFromQueue({ email }); }
+    catch (e) { console.debug('removeFromQueue failed:', e); }
   }
 
   // Kick off an icon refresh for the currently displayed message without
@@ -861,6 +1143,12 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       return;
     }
 
+    // Detect manuscript signal early — needed both for the per-message
+    // marked-suppression override and (later) attached to queue entries so
+    // popup rows can render the 📄 indicator and "Manuscript received" button.
+    const manuscriptSignal = await detectManuscriptSignal(msgHeader);
+    if (!stillValid()) return;
+
     const addresses = emails.map(e => e.address);
     const result = await checkEmails(addresses);
     if (!stillValid()) return;
@@ -871,13 +1159,14 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       return;
     }
 
-    // Load per-message opened + dismissed state so already-actioned / already-
-    // dismissed leads don't count toward the orange ring or re-enter the queue
-    // after cache expiry. If there's no headerMessageId (shouldn't happen for
-    // real messages), treat both as empty.
-    const [opened, dismissed] = await Promise.all([
+    // Load all per-message AND per-email state in one parallel batch.
+    // - opened/dismissed: per-message-id (existing) — suppress on this message
+    // - marked/terminal: per-email (new) — suppress across messages from this lead
+    const [opened, dismissed, marked, terminal] = await Promise.all([
       getOpened(headerMessageId),
-      getDismissed(headerMessageId)
+      getDismissed(headerMessageId),
+      getMarkedFor(addresses),
+      getTerminalFor(addresses)
     ]);
     if (!stillValid()) return;
 
@@ -886,14 +1175,21 @@ async function scanAndBadgeMessage(tab, msgHeader) {
     const toEnqueue = [];
     for (const addr of addresses) {
       const status = results[addr] ?? results[addr.toLowerCase()];
-      if (status === 2 || status === 3) {
-        const lower = addr.toLowerCase();
-        if (!opened[lower] && !dismissed[lower]) {
-          leadCount++;
-          if (headerMessageId) {
-            toEnqueue.push({ headerMessageId, email: lower, status });
-          }
-        }
+      if (status !== 2 && status !== 3) continue;
+      const lower = addr.toLowerCase();
+
+      if (terminal[lower]) continue;                          // forever-suppress
+      if (opened[lower] || dismissed[lower]) continue;        // per-message suppress
+      if (marked[lower] && !manuscriptSignal.has) continue;   // marked, no manuscript
+
+      leadCount++;
+      if (headerMessageId) {
+        toEnqueue.push({
+          headerMessageId,
+          email: lower,
+          status,
+          manuscriptSignal: manuscriptSignal.has ? manuscriptSignal : null
+        });
       }
     }
 
@@ -1019,7 +1315,7 @@ browser.runtime.onMessage.addListener((message) => {
     case 'checkEmails':               return checkEmails(message.emails);
     case 'getDisplayedMessageEmails': return getDisplayedMessageEmails(message.tabId);
     case 'getComposeEmails':          return getComposeEmails(message.tabId);
-    case 'openInV4':                  return openInV4(message.email, message.headerMessageId);
+    case 'openInV4':                  return openInV4(message.email, message.headerMessageId, !!message.terminal);
     case 'getOpened':                 return getOpened(message.headerMessageId).then(o => ({ opened: o }));
     // Called by the popup after it has its own fresh result. We verify that
     // the tab still shows the message the popup computed against, and that
@@ -1038,16 +1334,11 @@ browser.runtime.onMessage.addListener((message) => {
     // The popup uses 'dismissFromQueue' for user-initiated dismissal so the
     // same row doesn't re-enter after the 5-min badge cache expires.
     case 'removeFromQueue':
-      return removeFromQueue({
-        headerMessageId: message.headerMessageId,
-        email: message.email
-      }).then(() => getQueue()).then(queue => ({ queue }));
+      return removeFromQueue({ email: message.email })
+        .then(() => getQueue()).then(queue => ({ queue }));
     case 'dismissFromQueue':
       return markDismissed(message.headerMessageId, message.email)
-        .then(() => removeFromQueue({
-          headerMessageId: message.headerMessageId,
-          email: message.email
-        }))
+        .then(() => removeFromQueue({ email: message.email }))
         .then(() => getQueue())
         .then(queue => ({ queue }));
     default:                          return Promise.resolve({ error: 'unknown_method' });

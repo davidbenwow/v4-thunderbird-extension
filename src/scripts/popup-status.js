@@ -86,14 +86,46 @@
     }
   }
 
-  function makeLeadRow({ address, source }, statusCode, isOpened) {
+  // Manuscript variant of the Mark button. Used when a message contains a
+  // manuscript signal (.docx/.doc/.pdf attachment or known transfer-link host).
+  // Clicking writes markedTerminal:v1 in the background — the lead will not
+  // be re-queued from any future message.
+  function setManuscriptButtonState(markBtn) {
+    while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
+    const markIcon = document.createElement('img');
+    markIcon.className = 'mark-icon';
+    markIcon.src = 'images/icon-32.png';
+    markIcon.alt = '';
+    markBtn.appendChild(markIcon);
+    markBtn.appendChild(el('span', 'mark-label', 'Manuscript received'));
+    markBtn.classList.remove('opened');
+    markBtn.classList.add('manuscript');
+    markBtn.title = 'Mark this lead as Manuscript received in V4 — stops further reminders.';
+  }
+
+  // Builds the optional 📄 indicator span. Returns null if no signal.
+  function makeManuscriptIcon(signal) {
+    if (!signal || !signal.has) return null;
+    const docIcon = document.createElement('span');
+    docIcon.className = 'manuscript-icon';
+    docIcon.textContent = '📄 ';
+    docIcon.title = signal.type === 'attachment'
+      ? 'Possible manuscript attached: ' + signal.detail
+      : 'Possible manuscript transfer link: ' + signal.detail;
+    return docIcon;
+  }
+
+  function makeLeadRow({ address, source }, statusCode, isOpened, currentManuscriptSignal) {
     const s = STATUS[statusCode];
     const row = el('div', `lead-row ${s.className}`);
 
     const main = el('div', 'lead-row-main');
     const text = el('div', 'lead-text');
 
-    const emailDiv = el('div', 'lead-email', address);
+    const emailDiv = el('div', 'lead-email');
+    const docIcon = makeManuscriptIcon(currentManuscriptSignal);
+    if (docIcon) emailDiv.appendChild(docIcon);
+    emailDiv.appendChild(document.createTextNode(address));
     emailDiv.title = address;
     text.appendChild(emailDiv);
 
@@ -110,7 +142,14 @@
 
     const markBtn = el('button', 'mark-btn');
     markBtn.dataset.email = address;
-    setButtonState(markBtn, isOpened);
+    // Terminal variant only when message has a manuscript signal AND the lead
+    // hasn't already been opened (already-opened keeps the existing state UI).
+    if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
+      markBtn.dataset.terminal = '1';
+      setManuscriptButtonState(markBtn);
+    } else {
+      setButtonState(markBtn, isOpened);
+    }
     actions.appendChild(markBtn);
 
     const copyBtn = el('button', 'icon-btn copy-btn', '📋');
@@ -142,7 +181,12 @@
     const text = el('div', 'lead-text');
 
     const titleText = entry.subject && entry.subject.length ? entry.subject : entry.email;
-    const titleDiv = el('div', 'lead-email', titleText);
+    const titleDiv = el('div', 'lead-email');
+    // 📄 prefix when the message that triggered this queue row contained a
+    // manuscript signal (.docx/.doc/.pdf attachment, or a transfer-service URL).
+    const docIcon = makeManuscriptIcon(entry.manuscriptSignal);
+    if (docIcon) titleDiv.appendChild(docIcon);
+    titleDiv.appendChild(document.createTextNode(titleText));
     titleDiv.title = titleText;
     text.appendChild(titleDiv);
 
@@ -159,7 +203,14 @@
     markBtn.dataset.email = entry.email;
     markBtn.dataset.headerMessageId = entry.headerMessageId;
     markBtn.dataset.fromQueue = '1';
-    setButtonState(markBtn, false);
+    // Manuscript-triggered row → terminal Mark (writes markedTerminal:v1
+    // server-side; this lead never re-queues).
+    if (entry.manuscriptSignal && entry.manuscriptSignal.has) {
+      markBtn.dataset.terminal = '1';
+      setManuscriptButtonState(markBtn);
+    } else {
+      setButtonState(markBtn, false);
+    }
     actions.appendChild(markBtn);
 
     const dismissBtn = el('button', 'icon-btn dismiss-btn', '✕');
@@ -206,11 +257,13 @@
       // the dataset; fall back to the currently displayed message otherwise.
       const rowHeaderMessageId = markBtn.dataset.headerMessageId || currentHeaderMessageId;
       const fromQueue = markBtn.dataset.fromQueue === '1';
+      const terminal = markBtn.dataset.terminal === '1';
       try {
         await browser.runtime.sendMessage({
           method: 'openInV4',
           email,
-          headerMessageId: rowHeaderMessageId
+          headerMessageId: rowHeaderMessageId,
+          terminal
         });
       } catch (err) {
         markBtn.classList.remove('dispatching');
@@ -305,7 +358,7 @@
     if (!tab) { show('empty'); return; }
 
     const gathered = await gatherEmails(tab);
-    const { emails, error, headerMessageId } = gathered || {};
+    const { emails, error, headerMessageId, manuscriptSignal: currentManuscriptSignal } = gathered || {};
     currentHeaderMessageId = headerMessageId || null;
 
     if (error) {
@@ -383,7 +436,7 @@
     ui.leadsSection.appendChild(makeSectionHeader(title));
     for (const l of leads) {
       const isOpened = !!opened[l.address.toLowerCase()];
-      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened));
+      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal));
     }
     show('results');
   }
