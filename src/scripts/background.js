@@ -371,10 +371,13 @@ async function getQueue() {
 //
 // Dedup is GLOBAL by email (not per-message-id): one queue row per lead,
 // regardless of how many of their messages have been viewed. On collision,
-// the latest sighting wins for headerMessageId / subject / lastSeen / status
-// / manuscriptSignal. firstSeen and ordering are preserved so newest-first
-// means newest discovery, not newest sighting (re-sighting doesn't bump
-// you to the top of a 10-cap list).
+// the latest sighting wins for headerMessageId / subject / lastSeen / status,
+// but manuscriptSignal is STICKY — once a manuscript signal is associated
+// with a lead, a later plain follow-up can't erase it (otherwise the
+// terminal-mark intent and 📄 indicator would be lost if the user views
+// any non-manuscript message between the manuscript arrival and the click).
+// firstSeen and ordering are preserved so newest-first means newest
+// discovery, not newest sighting.
 async function enqueueMatchBatch(entries, msgHeader) {
   if (!Array.isArray(entries) || entries.length === 0) return;
   const now = Date.now();
@@ -383,19 +386,38 @@ async function enqueueMatchBatch(entries, msgHeader) {
     : '';
   return runUnderQueueLock(async () => {
     const list = pruneQueue(await readQueueRaw());
+
+    // Re-check marked/terminal inside the lock. Guards against a Mark click
+    // that landed AFTER the scan loop's Promise.all snapshot but BEFORE we
+    // acquired this lock — without this, we could enqueue a row the user has
+    // already actioned ("ghost row").
+    const emails = entries
+      .filter(e => e && e.email)
+      .map(e => String(e.email).toLowerCase());
+    const [marked, terminal] = await Promise.all([
+      getMarkedFor(emails),
+      getTerminalFor(emails)
+    ]);
+
     let changed = false;
     for (const entry of entries) {
       if (!entry || !entry.headerMessageId || !entry.email) continue;
       const email = String(entry.email).toLowerCase();
       const status = entry.status;
-      const manuscriptSignal = entry.manuscriptSignal || null;
+      const newSignal = entry.manuscriptSignal || null;
+
+      // Late-suppression: drop entries that became suppressed mid-scan.
+      if (terminal[email]) continue;
+      if (marked[email] && !newSignal) continue;
+
       const existingIdx = list.findIndex(e => e && e.email === email);
       if (existingIdx !== -1) {
         list[existingIdx].headerMessageId  = entry.headerMessageId;
         list[existingIdx].subject          = subject;
         list[existingIdx].lastSeen         = now;
         list[existingIdx].status           = status;
-        list[existingIdx].manuscriptSignal = manuscriptSignal;
+        // Sticky: only overwrite if the new sighting carries its own signal.
+        if (newSignal) list[existingIdx].manuscriptSignal = newSignal;
         changed = true;
       } else {
         list.unshift({
@@ -405,7 +427,7 @@ async function enqueueMatchBatch(entries, msgHeader) {
           subject,
           firstSeen: now,
           lastSeen: now,
-          manuscriptSignal
+          manuscriptSignal: newSignal
         });
         changed = true;
       }
@@ -577,7 +599,16 @@ function collectBodyText(part) {
   if (isAttachmentPart(part)) return '';
   let text = '';
   if (part.contentType && BODY_CONTENT_TYPES.has(part.contentType) && part.body) {
-    text += (part.contentType === 'text/html' ? stripHtmlTags(part.body) : part.body) + '\n';
+    if (part.contentType === 'text/html') {
+      // Extract URLs from href/src attributes BEFORE stripping tags — otherwise
+      // a download button like <a href="https://wetransfer.com/...">Download</a>
+      // loses the URL when <a> is removed, and our manuscript-link signal
+      // never fires for HTML mail (which is most modern email).
+      text += extractAnchorURLs(part.body) + '\n';
+      text += stripHtmlTags(part.body) + '\n';
+    } else {
+      text += part.body + '\n';
+    }
   }
   if (part.parts && part.parts.length) {
     for (const p of part.parts) text += collectBodyText(p);
@@ -590,6 +621,22 @@ function stripHtmlTags(s) {
   // consecutive whitespace. This is intentionally simple; the email regex
   // handles the rest.
   return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+}
+
+// Pull href / src URL attribute values out of an HTML body — needed so
+// download buttons and embedded links survive into the URL-host scan.
+// Matches both quote styles and ignores case.
+const ATTR_URL_REGEX = /\b(?:href|src)\s*=\s*["']([^"']+)["']/gi;
+
+function extractAnchorURLs(html) {
+  if (!html || typeof html !== 'string') return '';
+  ATTR_URL_REGEX.lastIndex = 0;
+  const out = [];
+  let m;
+  while ((m = ATTR_URL_REGEX.exec(html)) !== null) {
+    out.push(m[1]);
+  }
+  return out.join(' ');
 }
 
 // --- Manuscript signal detection --------------------------------------------
@@ -931,17 +978,25 @@ async function openInV4(email, headerMessageId, terminal = false) {
   // Per-EMAIL "marked" state — written on every Mark click so future scans
   // suppress this lead unless a manuscript signal arrives. Independent of
   // headerMessageId, so it survives across new messages from the same person.
+  let terminalSucceeded = !terminal;  // trivially "succeeded" when not requested
   if (email) {
     try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
     if (terminal) {
-      try { await markEmailTerminal(email); }
-      catch (e) { console.debug('markEmailTerminal failed:', e); }
+      try {
+        await markEmailTerminal(email);
+        terminalSucceeded = true;
+      } catch (e) {
+        // Don't silently downgrade to non-terminal: if the user clicked
+        // "Manuscript received" and storage failed, the lead is NOT actually
+        // forever-suppressed. Leave the queue row in place so they can retry.
+        console.warn('markEmailTerminal failed; queue row preserved:', e);
+      }
     }
   }
-  // Drop this match from the recent-matches queue. Filtered by email only
-  // (queue dedupes globally by email). storage.onChanged → refreshBadgeCount
-  // decrements the badge.
-  if (email) {
+  // Drop the queue row only if we fully persisted the user's intent.
+  // For non-terminal Marks, terminalSucceeded is trivially true (initialized
+  // above). For terminal Marks, only true if markEmailTerminal completed.
+  if (email && terminalSucceeded) {
     try { await removeFromQueue({ email }); }
     catch (e) { console.debug('removeFromQueue failed:', e); }
   }
