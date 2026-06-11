@@ -180,7 +180,9 @@
     }
     // Status chip (status mode only). pendingMark overrides the API status —
     // the user just acted; showing the stale status would contradict them.
-    const chip = makeStatusChip(isPending ? 'updating' : leadStatus);
+    // Guard on leadStatus so legacy rows never get a chip, even if a caller
+    // passes isPending for a legacy lead.
+    const chip = leadStatus === null ? null : makeStatusChip(isPending ? 'updating' : leadStatus);
     if (chip) metaDiv.appendChild(chip);
     if (metaDiv.childNodes.length) text.appendChild(metaDiv);
 
@@ -537,7 +539,11 @@
     for (const l of leads) {
       const lower = l.address.toLowerCase();
       const isOpened = !!opened[lower];
-      const isPending = !isOpened && !!pending[lower];
+      // pendingMark is a status-mode concept: the "Updating…" chip replaces a
+      // stale API status. In legacy mode (leadStatus null) there is no chip
+      // at all, so pending must not surface — openInV4 writes pendingMark on
+      // every Mark click regardless of mode.
+      const isPending = !isOpened && !!pending[lower] && l.leadStatus !== null;
       ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal, isPending));
     }
     show('results');

@@ -581,9 +581,11 @@ async function revalidateQueue(force = false) {
       }
       const hasSignal = entry.manuscriptSignal && entry.manuscriptSignal.has;
       if (p.status === 'response' && !hasSignal) { changed = true; continue; }  // no longer actionable
-      if (entry.leadStatus !== p.status) changed = true;
       entry.leadStatus = p.status;
       entry.revalidatedAt = Date.now();
+      // Persist the freshness metadata too — revalidation runs are already
+      // throttled (≥5 min or explicit popup open), so one write per run is fine.
+      changed = true;
       kept.push(entry);
     }
     if (changed || kept.length !== raw.length) {
@@ -684,7 +686,11 @@ const LEAD_STATUS_ALIASES = {
 };
 
 // Values that clearly mean "not in the database" if the API switches to strings.
-const NOT_FOUND_ALIASES = new Set(['not_found', 'not found', 'none', 'no_lead', 'unknown']);
+// Deliberately narrow: ambiguous values like 'unknown' must NOT be here —
+// if IT used "unknown" for an existing lead with an unset status, classifying
+// it as not-found would kill the ring/queue for a real lead. Ambiguous values
+// fall through to normalizeLeadStatus → warn + legacy degrade (exists: true).
+const NOT_FOUND_ALIASES = new Set(['not_found', 'not found', 'no_lead']);
 
 function normalizeLeadStatus(raw) {
   if (typeof raw !== 'string') return null;
