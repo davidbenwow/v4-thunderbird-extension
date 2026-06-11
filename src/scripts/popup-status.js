@@ -179,7 +179,9 @@
       const docIcon = makeManuscriptIcon(currentManuscriptSignal);
       if (docIcon) sub.appendChild(docIcon);
       sub.appendChild(el('span', 'sub-email', address));
-      if (source) {
+      // 'sender' is the default/obvious case — annotating it is just noise.
+      // Other sources (recipient, Cc, found in thread) ARE worth flagging.
+      if (source && source !== 'sender') {
         sub.appendChild(el('span', 'sub-sep', '·'));
         sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
       }
@@ -233,7 +235,7 @@
     emailDiv.title = address;
     text.appendChild(emailDiv);
 
-    if (source) {
+    if (source && source !== 'sender') {
       const metaDiv = el('div', 'lead-meta');
       metaDiv.appendChild(el('span', 'source-hint', SOURCE_LABELS[source] || source));
       text.appendChild(metaDiv);
