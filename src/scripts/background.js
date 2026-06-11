@@ -1066,7 +1066,7 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
     // badge were removed in v1.21).
     const title = opts.showAlert
       ? 'V4 Contacts — not configured. Open preferences to set up.'
-      : (useActive ? 'Mark Lead in V4' : 'Nothing to mark in V4');
+      : (useActive ? 'Mark lead in V4' : 'Nothing to mark in V4');
     await browser.messageDisplayAction.setTitle({ title, tabId });
   } catch (err) {
     // Tab may have closed, or API may not exist on older Thunderbird builds

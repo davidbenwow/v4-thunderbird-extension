@@ -66,7 +66,7 @@
       markIcon.src = 'images/icon-32.png';
       markIcon.alt = '';
       markBtn.appendChild(markIcon);
-      markBtn.appendChild(el('span', 'mark-label', 'Mark Lead in V4'));
+      markBtn.appendChild(el('span', 'mark-label', 'Mark lead in V4'));
       markBtn.classList.remove('opened');
       markBtn.title = 'Open this lead in V4 to mark its status';
     }
@@ -83,10 +83,10 @@
     markIcon.src = 'images/icon-32.png';
     markIcon.alt = '';
     markBtn.appendChild(markIcon);
-    markBtn.appendChild(el('span', 'mark-label', 'Mark as Manuscript received'));
+    markBtn.appendChild(el('span', 'mark-label', 'Mark as manuscript received'));
     markBtn.classList.remove('opened');
     markBtn.classList.add('manuscript');
-    markBtn.title = 'Open this lead in V4 and mark their status as Manuscript received.';
+    markBtn.title = 'Open this lead in V4 and mark their status as manuscript received.';
   }
 
   // Status-mode variants. "Mark as Response" is the call-to-action when the
@@ -99,9 +99,9 @@
     markIcon.src = 'images/icon-32.png';
     markIcon.alt = '';
     markBtn.appendChild(markIcon);
-    markBtn.appendChild(el('span', 'mark-label', 'Mark as Response'));
+    markBtn.appendChild(el('span', 'mark-label', 'Mark as response'));
     markBtn.classList.remove('opened');
-    markBtn.title = 'Open this lead in V4 and mark their status as Response.';
+    markBtn.title = 'Open this lead in V4 and mark their status as response.';
   }
 
   // Informational "Open in V4" — shown when no marking action is needed
@@ -153,7 +153,10 @@
   }
 
   // leadStatus: normalized V4 status string or null (legacy mode).
-  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal) {
+  // opts.overline    — render a small "Current status" label above the status
+  // opts.hideSubtitle — identity lives in the section header (single-lead view)
+  // opts.hideCopy     — the copy button lives next to the email in the header
+  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, opts = {}) {
     const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
 
     // ---- STATUS MODE: the live V4 status is the headline AND the sole source
@@ -167,20 +170,25 @@
 
       const main = el('div', 'lead-row-main');
       const text = el('div', 'lead-text');
+      if (opts.overline) {
+        text.appendChild(el('div', 'status-overline', 'Current status'));
+      }
       text.appendChild(makeStatusTitle(leadStatus));
 
-      const sub = el('div', 'lead-subtitle');
-      const docIcon = makeManuscriptIcon(currentManuscriptSignal);
-      if (docIcon) sub.appendChild(docIcon);
-      sub.appendChild(el('span', 'sub-email', address));
-      // 'sender' is the default/obvious case — annotating it is just noise.
-      // Other sources (recipient, Cc, found in thread) ARE worth flagging.
-      if (source && source !== 'sender') {
-        sub.appendChild(el('span', 'sub-sep', '·'));
-        sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
+      if (!opts.hideSubtitle) {
+        const sub = el('div', 'lead-subtitle');
+        const docIcon = makeManuscriptIcon(currentManuscriptSignal);
+        if (docIcon) sub.appendChild(docIcon);
+        sub.appendChild(el('span', 'sub-email', address));
+        // 'sender' is the default/obvious case — annotating it is just noise.
+        // Other sources (recipient, Cc, found in thread) ARE worth flagging.
+        if (source && source !== 'sender') {
+          sub.appendChild(el('span', 'sub-sep', '·'));
+          sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
+        }
+        sub.title = address;
+        text.appendChild(sub);
       }
-      sub.title = address;
-      text.appendChild(sub);
       main.appendChild(text);
       row.appendChild(main);
 
@@ -202,7 +210,7 @@
         setOpenOnlyButtonState(markBtn);
       }
       actions.appendChild(markBtn);
-      actions.appendChild(makeCopyBtn(address));
+      if (!opts.hideCopy) actions.appendChild(makeCopyBtn(address));
       row.appendChild(actions);
       return row;
     }
@@ -253,6 +261,26 @@
   function makeSectionHeader(title) {
     const h = el('div', 'section-header');
     h.appendChild(el('span', 'section-title', title));
+    return h;
+  }
+
+  // Identity header for the single-lead view: LEAD <email> [📄] [source] [copy].
+  // The email is WHO this popup is about — it belongs in the header line, not
+  // buried in the row competing with the status. The copy button sits next to
+  // the email it copies.
+  function makeLeadHeader({ address, source }, manuscriptSignal) {
+    const h = el('div', 'section-header');
+    h.appendChild(el('span', 'section-label', 'Lead'));
+    const emailSpan = el('span', 'section-lead-email', address);
+    emailSpan.title = address;
+    h.appendChild(emailSpan);
+    const docIcon = makeManuscriptIcon(manuscriptSignal);
+    if (docIcon) h.appendChild(docIcon);
+    if (source && source !== 'sender') {
+      h.appendChild(el('span', 'section-lead-source', SOURCE_LABELS[source] || source));
+    }
+    h.appendChild(el('span', 'section-spacer'));
+    h.appendChild(makeCopyBtn(address));
     return h;
   }
 
@@ -434,12 +462,24 @@
       ui.leadsSection.removeChild(ui.leadsSection.firstChild);
     }
 
-    const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
-    ui.leadsSection.appendChild(makeSectionHeader(title));
-    for (const l of leads) {
-      const ev = evaluation[l.address.toLowerCase()] || {};
-      const isOpened = !!ev.opened;  // legacy-mode only
-      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal));
+    const single = leads.length === 1 ? leads[0] : null;
+    if (single && single.leadStatus !== null) {
+      // One status-mode lead (the overwhelmingly common case): identity in
+      // the header, labeled status + action in the row.
+      ui.leadsSection.appendChild(makeLeadHeader(single, currentManuscriptSignal));
+      const ev = evaluation[single.address.toLowerCase()] || {};
+      ui.leadsSection.appendChild(makeLeadRow(
+        single, single.statusCode, !!ev.opened, currentManuscriptSignal,
+        { overline: true, hideSubtitle: true, hideCopy: true }
+      ));
+    } else {
+      const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
+      ui.leadsSection.appendChild(makeSectionHeader(title));
+      for (const l of leads) {
+        const ev = evaluation[l.address.toLowerCase()] || {};
+        const isOpened = !!ev.opened;  // legacy-mode only
+        ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal));
+      }
     }
     show('results');
   }

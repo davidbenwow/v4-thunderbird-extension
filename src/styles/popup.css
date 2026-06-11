@@ -250,6 +250,59 @@ header h1 {
   font-weight: 500;
 }
 
+/* ========== Single-lead identity header =============================== */
+/* LEAD <email> [📄] [source] ......... [copy] — the email is who the popup
+   is about; it lives in the header so the row below is free for the labeled
+   status + action. The base .section-header uppercases text, so the email
+   and source need text-transform: none. */
+.section-label { flex: 0 0 auto; }
+
+.section-spacer { flex: 1; }
+
+.section-lead-email {
+  text-transform: none;
+  letter-spacing: -0.1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-700);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-lead-source {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-400);
+  white-space: nowrap;
+}
+
+.section-header .manuscript-icon {
+  text-transform: none;
+  font-size: 12px;
+}
+
+.section-header .icon-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Small uppercase label above the status headline in the single-lead view. */
+.status-overline {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--ink-400);
+  margin-bottom: 3px;
+  user-select: none;
+}
+
 /* ========== V4 lead-status headline (status mode) ==================== */
 /* The status is the row's primary line — bold colored text with a matching
    dot; the row also gets a left border in the same color (set inline). The
