@@ -25,8 +25,7 @@
     empty:         document.getElementById('state-empty'),
     noLeads:       document.getElementById('state-no-leads'),
     results:       document.getElementById('state-results'),
-    leadsSection:  document.getElementById('leads-section'),
-    queueSection:  document.getElementById('queue-section')
+    leadsSection:  document.getElementById('leads-section')
   };
 
   // Kept at module scope so click handlers can reference the current message
@@ -35,26 +34,13 @@
 
   function show(stateKey) {
     const keys = ['loading', 'notConfigured', 'disabled', 'error', 'empty', 'noLeads', 'results'];
-    // 'none' is a special sentinel meaning "hide all state-* banners" — used
-    // when the queue has pending entries so the queue becomes the sole
-    // content, avoiding contradictions like "Nothing to check" above
-    // "Still to mark in V4".
-    if (stateKey !== 'none' && !keys.includes(stateKey)) {
+    if (!keys.includes(stateKey)) {
       console.error('V4 Contacts: unknown state', stateKey);
       return;
     }
     for (const key of keys) {
       ui[key].classList.toggle('hidden', key !== stateKey);
     }
-  }
-
-  // Ask the background for queue length without rendering it. Used to decide
-  // whether to show state banners or suppress them in favor of queue-only UI.
-  async function fetchQueueLen() {
-    try {
-      const r = await browser.runtime.sendMessage({ method: 'getQueue' });
-      return (r && Array.isArray(r.queue)) ? r.queue.length : 0;
-    } catch (e) { return 0; }
   }
 
   function el(tag, className, textContent) {
@@ -89,7 +75,7 @@
   // Manuscript variant of the Mark button. Used when a message contains a
   // manuscript signal (.docx/.doc/.pdf attachment or known transfer-link host).
   // Clicking writes markedTerminal:v1 in the background — the lead will not
-  // be re-queued from any future message.
+  // resurface from any future message.
   function setManuscriptButtonState(markBtn) {
     while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
     const markIcon = document.createElement('img');
@@ -232,93 +218,6 @@
     return h;
   }
 
-  // --- Recent matches queue ------------------------------------------------
-  // A queue row renders the subject prominently (it's how users recognize
-  // messages) with the email shown below as the identifying detail. The Mark
-  // button is the same as the per-email one, but it carries its own
-  // headerMessageId via dataset so the handler routes to the right message.
-  // The Dismiss (✕) button removes the entry without marking.
-  function makeQueueRow(entry) {
-    const s = STATUS[entry.status] || STATUS[3];
-    const row = el('div', `lead-row ${s.className}`);
-
-    const main = el('div', 'lead-row-main');
-    const text = el('div', 'lead-text');
-
-    const titleText = entry.subject && entry.subject.length ? entry.subject : entry.email;
-    const titleDiv = el('div', 'lead-email');
-    // 📄 prefix when the message that triggered this queue row contained a
-    // manuscript signal (.docx/.doc/.pdf attachment, or a transfer-service URL).
-    const docIcon = makeManuscriptIcon(entry.manuscriptSignal);
-    if (docIcon) titleDiv.appendChild(docIcon);
-    titleDiv.appendChild(document.createTextNode(titleText));
-    titleDiv.title = titleText;
-    text.appendChild(titleDiv);
-
-    const metaDiv = el('div', 'lead-meta');
-    metaDiv.appendChild(el('span', 'source-hint', entry.email));
-    // Status chip when the entry has been seen/revalidated in status mode.
-    const chip = makeStatusChip(entry.leadStatus);
-    if (chip) metaDiv.appendChild(chip);
-    text.appendChild(metaDiv);
-
-    main.appendChild(text);
-    row.appendChild(main);
-
-    const actions = el('div', 'lead-row-actions');
-
-    const markBtn = el('button', 'mark-btn');
-    markBtn.dataset.email = entry.email;
-    markBtn.dataset.headerMessageId = entry.headerMessageId;
-    markBtn.dataset.fromQueue = '1';
-    // Manuscript-triggered row → terminal Mark (writes markedTerminal:v1
-    // server-side; this lead never re-queues).
-    if (entry.manuscriptSignal && entry.manuscriptSignal.has) {
-      markBtn.dataset.terminal = '1';
-      setManuscriptButtonState(markBtn);
-    } else if (entry.leadStatus === 'no_response') {
-      setResponseButtonState(markBtn);
-    } else {
-      setButtonState(markBtn, false);
-    }
-    actions.appendChild(markBtn);
-
-    const dismissBtn = el('button', 'icon-btn dismiss-btn', '✕');
-    dismissBtn.dataset.email = entry.email;
-    dismissBtn.dataset.headerMessageId = entry.headerMessageId;
-    dismissBtn.title = 'Dismiss from recent matches';
-    actions.appendChild(dismissBtn);
-
-    row.appendChild(actions);
-    return row;
-  }
-
-  async function renderQueue() {
-    let queue = [];
-    try {
-      // revalidateQueue refreshes entries against live V4 statuses first
-      // (status mode only — it degrades to a plain getQueue in legacy mode
-      // and on any API failure, so reminders are never lost to a network blip).
-      const r = await browser.runtime.sendMessage({ method: 'revalidateQueue' });
-      queue = (r && Array.isArray(r.queue)) ? r.queue : [];
-    } catch (e) { /* best effort — leave queue hidden if IPC fails */ }
-
-    while (ui.queueSection.firstChild) {
-      ui.queueSection.removeChild(ui.queueSection.firstChild);
-    }
-
-    if (queue.length === 0) {
-      ui.queueSection.classList.add('hidden');
-      return;
-    }
-
-    ui.queueSection.classList.remove('hidden');
-    ui.queueSection.appendChild(makeSectionHeader('Still to mark in V4 👇'));
-    for (const entry of queue) {
-      ui.queueSection.appendChild(makeQueueRow(entry));
-    }
-  }
-
   // --- Event handlers ------------------------------------------------------
   document.addEventListener('click', async (e) => {
     const markBtn = e.target.closest('.mark-btn');
@@ -326,16 +225,12 @@
       if (markBtn.classList.contains('dispatching')) return;
       markBtn.classList.add('dispatching');
       const email = markBtn.dataset.email;
-      // A Mark click from a queue row carries its own headerMessageId in
-      // the dataset; fall back to the currently displayed message otherwise.
-      const rowHeaderMessageId = markBtn.dataset.headerMessageId || currentHeaderMessageId;
-      const fromQueue = markBtn.dataset.fromQueue === '1';
       const terminal = markBtn.dataset.terminal === '1';
       try {
         await browser.runtime.sendMessage({
           method: 'openInV4',
           email,
-          headerMessageId: rowHeaderMessageId,
+          headerMessageId: currentHeaderMessageId,
           terminal
         });
       } catch (err) {
@@ -359,35 +254,6 @@
           if (updated) chipEl.replaceWith(updated);
         }
       } catch (e) { /* cosmetic only */ }
-      // A queue-row Mark removed the entry from the queue server-side; refresh
-      // the UI so the row disappears.
-      if (fromQueue) {
-        renderQueue().catch(() => {});
-      }
-      return;
-    }
-
-    const dismissBtn = e.target.closest('.dismiss-btn');
-    if (dismissBtn) {
-      if (dismissBtn.classList.contains('dispatching')) return;
-      dismissBtn.classList.add('dispatching');
-      const email = dismissBtn.dataset.email;
-      const headerMessageId = dismissBtn.dataset.headerMessageId;
-      try {
-        // dismissFromQueue (vs. removeFromQueue) also writes dismissed:v1
-        // state so the same match doesn't re-enter the queue after the
-        // 5-min scan cache expires and the user re-views the message.
-        await browser.runtime.sendMessage({
-          method: 'dismissFromQueue',
-          email,
-          headerMessageId
-        });
-      } catch (err) {
-        console.error('Dismiss failed:', err);
-        dismissBtn.classList.remove('dispatching');
-        return;
-      }
-      await renderQueue();
       return;
     }
 
@@ -434,10 +300,6 @@
     if (!config || !config.enabled) { show('disabled');      return; }
     if (!config.apiKey)             { show('notConfigured'); return; }
 
-    // Kick off the recent-matches queue render in parallel — independent of
-    // the per-message scan. Self-hides when empty.
-    renderQueue().catch(() => {});
-
     const tab = await getCurrentTab();
     if (!tab) { show('empty'); return; }
 
@@ -451,10 +313,7 @@
       return;
     }
     if (!emails || !emails.length) {
-      // Suppress "Nothing to check" when the queue has pending entries —
-      // the queue IS the content; the banner would contradict it.
-      const queueLen = await fetchQueueLen();
-      show(queueLen > 0 ? 'none' : 'empty');
+      show('empty');
       return;
     }
 
@@ -529,10 +388,7 @@
     }).catch(() => { /* best effort */ });
 
     if (leads.length === 0) {
-      // Same rule as 'empty': if the queue has pending entries, don't
-      // distract with "Nothing to mark in V4" above them.
-      const queueLen = await fetchQueueLen();
-      show(queueLen > 0 ? 'none' : 'noLeads');
+      show('noLeads');
       return;
     }
 
