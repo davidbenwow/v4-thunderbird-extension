@@ -56,10 +56,22 @@
       return;
     }
 
-    await browser.runtime.sendMessage({
-      method: 'setConfig',
-      payload: { apiKey: rawKey }
-    });
+    try {
+      await browser.runtime.sendMessage({
+        method: 'setConfig',
+        payload: { apiKey: rawKey }
+      });
+    } catch (err) {
+      // Without this catch a storage/IPC failure exits the handler silently —
+      // the user assumes the key was saved when it wasn't.
+      saveStatus.textContent = 'Save failed — please try again';
+      saveStatus.style.color = '#dc2626';
+      setTimeout(() => {
+        saveStatus.textContent = '';
+        saveStatus.style.color = '';
+      }, 4000);
+      return;
+    }
     saveStatus.textContent = 'Saved ✓';
     saveStatus.style.color = '';
     setTimeout(() => { saveStatus.textContent = ''; }, 2000);

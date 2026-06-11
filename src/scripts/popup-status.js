@@ -488,33 +488,28 @@
       }
     }
 
-    // Fetch opened-state (per-message) and pendingMark bridge state (per-email)
-    // so each button and chip renders correctly.
-    let opened = {};
-    let pending = {};
+    // Ask the background to evaluate every lead through the SAME central
+    // suppression matrix the scan loop uses (decideActionable). The popup
+    // deliberately does NOT reimplement the matrix — a popup-side copy is how
+    // marked/terminal leads ended up re-lighting the ring after popup open.
+    // The response also carries the opened/pending flags rows render with.
+    let evaluation = {};
     try {
-      const [openedR, pendingR] = await Promise.all([
-        currentHeaderMessageId
-          ? browser.runtime.sendMessage({ method: 'getOpened', headerMessageId: currentHeaderMessageId })
-          : Promise.resolve({}),
-        browser.runtime.sendMessage({ method: 'getPendingFor', emails: leads.map(l => l.address) })
-      ]);
-      opened = (openedR && openedR.opened) || {};
-      pending = (pendingR && pendingR.pending) || {};
-    } catch (e) { /* best effort */ }
+      const r = await browser.runtime.sendMessage({
+        method: 'evaluateLeads',
+        leads: leads.map(l => ({ email: l.address, leadStatus: l.leadStatus })),
+        headerMessageId: currentHeaderMessageId,
+        manuscriptHas: !!(currentManuscriptSignal && currentManuscriptSignal.has)
+      });
+      evaluation = (r && r.evaluation) || {};
+    } catch (e) { /* best effort — unevaluated leads render unmarked, count 0 */ }
 
-    // Actionable leads drive the toolbar ring — apply the same matrix as the
-    // background scan, or the ring would glow for non-actionable messages.
-    const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
-    const isActionable = (l) => {
-      const lower = l.address.toLowerCase();
-      if (opened[lower]) return false;
-      if (l.leadStatus === null) return true;  // legacy: any unopened lead counts
-      if (l.leadStatus === 'manuscript_received' || l.leadStatus === 'rejected') return false;
-      if (pending[lower]) return false;
-      return l.leadStatus === 'no_response' || manuscriptHas;
-    };
-    const unopenedCount = leads.filter(isActionable).length;
+    // Actionable leads drive the toolbar ring — same matrix as the scan, so
+    // the ring never glows for already-marked / terminal / dismissed leads.
+    const unopenedCount = leads.filter(l => {
+      const ev = evaluation[l.address.toLowerCase()];
+      return !!(ev && ev.actionable);
+    }).length;
     browser.runtime.sendMessage({
       method: 'syncBadge',
       tabId: tab.id,
@@ -537,13 +532,13 @@
     const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
     ui.leadsSection.appendChild(makeSectionHeader(title));
     for (const l of leads) {
-      const lower = l.address.toLowerCase();
-      const isOpened = !!opened[lower];
+      const ev = evaluation[l.address.toLowerCase()] || {};
+      const isOpened = !!ev.opened;
       // pendingMark is a status-mode concept: the "Updating…" chip replaces a
       // stale API status. In legacy mode (leadStatus null) there is no chip
       // at all, so pending must not surface — openInV4 writes pendingMark on
       // every Mark click regardless of mode.
-      const isPending = !isOpened && !!pending[lower] && l.leadStatus !== null;
+      const isPending = !isOpened && !!ev.pending && l.leadStatus !== null;
       ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal, isPending));
     }
     show('results');

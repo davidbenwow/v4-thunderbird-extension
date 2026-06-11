@@ -55,6 +55,12 @@ async function markOpened(headerMessageId, email) {
   return next;
 }
 
+// One full-storage read shared by all five startup prune passes below —
+// previously each did its own get(null), i.e. five full dumps per load.
+// The snapshot is only used at startup; prunes were already racing any
+// concurrent writes by design (deleting stale keys is idempotent).
+const startupStorageSnapshot = browser.storage.local.get(null);
+
 // Startup pruning: drop opened-state entries older than 6 months. Bounded
 // by browser.storage.local quota; not urgent but worth doing to keep things
 // tidy. Runs once per background-script load.
@@ -62,7 +68,7 @@ async function pruneStaleOpenedEntries() {
   const CUTOFF_MS = 180 * 24 * 60 * 60 * 1000; // ~6 months
   const cutoff = Date.now() - CUTOFF_MS;
   try {
-    const all = await browser.storage.local.get(null);
+    const all = await startupStorageSnapshot;
     const keysToDelete = [];
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(OPENED_KEY_PREFIX)) continue;
@@ -130,7 +136,7 @@ async function pruneStaleDismissedEntries() {
   const CUTOFF_MS = 180 * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - CUTOFF_MS;
   try {
-    const all = await browser.storage.local.get(null);
+    const all = await startupStorageSnapshot;
     const keysToDelete = [];
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(DISMISSED_KEY_PREFIX)) continue;
@@ -218,7 +224,7 @@ async function pruneStaleMarkedEntries() {
   const CUTOFF_MS = 365 * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - CUTOFF_MS;
   try {
-    const all = await browser.storage.local.get(null);
+    const all = await startupStorageSnapshot;
     const keysToDelete = [];
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(MARKED_KEY_PREFIX)) continue;
@@ -294,7 +300,7 @@ async function pruneStaleTerminalEntries() {
   const CUTOFF_MS = 5 * 365 * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - CUTOFF_MS;
   try {
-    const all = await browser.storage.local.get(null);
+    const all = await startupStorageSnapshot;
     const keysToDelete = [];
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(TERMINAL_KEY_PREFIX)) continue;
@@ -366,7 +372,7 @@ async function markPending(email) {
 async function pruneStalePendingEntries() {
   const cutoff = Date.now() - PENDING_TTL_MS;
   try {
-    const all = await browser.storage.local.get(null);
+    const all = await startupStorageSnapshot;
     const keysToDelete = [];
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(PENDING_KEY_PREFIX)) continue;
@@ -383,6 +389,47 @@ async function pruneStalePendingEntries() {
 }
 pruneStalePendingEntries();
 
+// --- Central actionability decision -------------------------------------------
+// THE single implementation of the suppression matrix. Every consumer of
+// "should this lead be counted / ringed / queued?" must call this instead of
+// reimplementing the branches — the scan loop, the enqueue under-lock recheck,
+// and the popup count drifted apart in v1.18–1.19 (ring contradiction on
+// marked leads; dismiss-mid-scan ghost rows), which is exactly the bug class
+// a single decision point eliminates.
+//
+// state: { opened, dismissed, marked, terminal, pending } — per-email maps;
+//        opened/dismissed are keyed for the relevant message's headerMessageId.
+// leadStatus: normalized V4 status string, or null for legacy mode.
+// manuscriptHas: whether the relevant message carries a manuscript signal.
+function decideActionable(lower, leadStatus, manuscriptHas, state) {
+  if (leadStatus !== null) {
+    // STATUS MODE — the API status is the truth for this lead.
+    if (leadStatus === 'manuscript_received' || leadStatus === 'rejected') return false;
+    if (state.opened[lower] || state.dismissed[lower]) return false;   // per-message
+    if (state.pending[lower]) return false;                            // just-marked bridge
+    return leadStatus === 'no_response' || manuscriptHas;
+  }
+  // LEGACY MODE — numeric-only API.
+  if (state.terminal[lower]) return false;                             // forever-suppress
+  if (state.opened[lower] || state.dismissed[lower]) return false;     // per-message
+  if (state.marked[lower] && !manuscriptHas) return false;             // marked, no manuscript
+  return true;
+}
+
+// Batch-fetch every suppression-state map decideActionable needs, in one
+// parallel round. headerMessageId may be null (e.g. compose) — the
+// per-message maps then come back empty, which is the correct neutral value.
+async function getLeadStateFor(addresses, headerMessageId) {
+  const [opened, dismissed, marked, terminal, pending] = await Promise.all([
+    getOpened(headerMessageId),
+    getDismissed(headerMessageId),
+    getMarkedFor(addresses),
+    getTerminalFor(addresses),
+    getPendingFor(addresses)
+  ]);
+  return { opened, dismissed, marked, terminal, pending };
+}
+
 // --- Recent-matches queue ---------------------------------------------------
 // Persistent user-global queue of V4 matches the user has viewed but not
 // acted on. Drives the count badge on the toolbar icon AND the "Recent
@@ -390,13 +437,16 @@ pruneStalePendingEntries();
 // user-driven removal (Mark / Dismiss) + out-of-band markOpened clear entries.
 //
 // Schema: `queue:v1` -> Array<{
-//   headerMessageId: string,   // RFC Message-ID of the email the match was seen in
-//   email: string,             // lowercased lead email
-//   status: 2 | 3,             // V4 status code at last sighting (used/pending)
-//   subject: string,           // email subject, truncated to 200 chars
-//   firstSeen: number,         // Date.now() of first enqueue — drives TTL
-//   lastSeen: number           // Date.now() of most recent sighting
-// }> — newest first, de-duped by (headerMessageId, email), capped at QUEUE_CAP.
+//   headerMessageId: string,    // RFC Message-ID of the LATEST message the match was seen in
+//   email: string,              // lowercased lead email (global dedup key)
+//   status: 2 | 3,              // numeric legacy code — drives row CSS class
+//   leadStatus: string | null,  // normalized V4 status (status mode) or null (legacy)
+//   revalidatedAt: number|null, // last time leadStatus was refreshed against the API
+//   manuscriptSignal: { has, type, detail } | null, // STICKY once set — see enqueueMatchBatch
+//   subject: string,            // email subject, truncated to 200 chars
+//   firstSeen: number,          // Date.now() of first enqueue — drives TTL + ordering
+//   lastSeen: number            // Date.now() of most recent sighting
+// }> — newest first, de-duped GLOBALLY by email, capped at QUEUE_CAP.
 const QUEUE_KEY    = 'queue:v1';
 const QUEUE_CAP    = 10;
 // 10 days covers weekends and short vacations without letting the queue
@@ -462,19 +512,19 @@ async function enqueueMatchBatch(entries, msgHeader) {
   return runUnderQueueLock(async () => {
     const list = pruneQueue(await readQueueRaw());
 
-    // Re-check suppression state inside the lock. Guards against a Mark click
-    // that landed AFTER the scan loop's Promise.all snapshot but BEFORE we
-    // acquired this lock — without this, we could enqueue a row the user has
-    // already actioned ("ghost row"). In status mode the bridge state
-    // (pendingMark) plays the role marked/terminal play in legacy mode.
+    // Re-check suppression state inside the lock via the SAME central
+    // decision used by the scan loop. Guards against a Mark or Dismiss click
+    // that landed AFTER the scan's state snapshot but BEFORE we acquired this
+    // lock — without this, we could enqueue a row the user just actioned
+    // ("ghost row"). Includes opened/dismissed (per-message) — a mid-scan
+    // Dismiss writes dismissed:v1 and must suppress here too.
     const emails = entries
       .filter(e => e && e.email)
       .map(e => String(e.email).toLowerCase());
-    const [marked, terminal, pending] = await Promise.all([
-      getMarkedFor(emails),
-      getTerminalFor(emails),
-      getPendingFor(emails)
-    ]);
+    const recheckState = await getLeadStateFor(
+      emails,
+      msgHeader && msgHeader.headerMessageId ? msgHeader.headerMessageId : null
+    );
 
     let changed = false;
     for (const entry of entries) {
@@ -485,12 +535,7 @@ async function enqueueMatchBatch(entries, msgHeader) {
       const newSignal = entry.manuscriptSignal || null;
 
       // Late-suppression: drop entries that became suppressed mid-scan.
-      if (leadStatus !== null) {
-        if (pending[email]) continue;                 // status mode: just-marked bridge
-      } else {
-        if (terminal[email]) continue;                // legacy mode
-        if (marked[email] && !newSignal) continue;
-      }
+      if (!decideActionable(email, leadStatus, !!(newSignal && newSignal.has), recheckState)) continue;
 
       const existingIdx = list.findIndex(e => e && e.email === email);
       if (existingIdx !== -1) {
@@ -582,6 +627,10 @@ async function revalidateQueue(force = false) {
       const hasSignal = entry.manuscriptSignal && entry.manuscriptSignal.has;
       if (p.status === 'response' && !hasSignal) { changed = true; continue; }  // no longer actionable
       entry.leadStatus = p.status;
+      // Keep the numeric code in sync too — it drives the row's CSS color
+      // class in makeQueueRow; updating only leadStatus would leave the row
+      // color contradicting the chip until the next enqueue.
+      entry.status = p.legacyCode;
       entry.revalidatedAt = Date.now();
       // Persist the freshness metadata too — revalidation runs are already
       // throttled (≥5 min or explicit popup open), so one write per run is fine.
@@ -601,12 +650,19 @@ async function revalidateQueue(force = false) {
 // carries the "attention" signal, so using the same orange on the count
 // badge creates orange-on-orange visual noise. Green contrasts cleanly and
 // matches the popup's success palette (status-ok / "Opened in browser").
+// Cached queue length, refreshed by every refreshBadgeCount run (which fires
+// on every queue mutation via storage.onChanged). Lets updateBadgeForTab
+// compose its tooltip without re-reading the queue from storage on every
+// fast-navigation badge update. null = not yet known; fall back to a read.
+let lastKnownQueueLen = null;
+
 async function refreshBadgeCount() {
   if (typeof browser.messageDisplayAction === 'undefined' ||
       typeof browser.messageDisplayAction.setBadgeText !== 'function') return;
   try {
     const { enabled } = await getConfig();
     const count = enabled ? (await getQueue()).length : 0;
+    lastKnownQueueLen = count;
     await browser.messageDisplayAction.setBadgeText({
       text: count > 0 ? String(count) : ''
     });
@@ -729,10 +785,16 @@ function parseCheckResponse(data, statusModeOff) {
   return parsed;
 }
 
-// Tracks whether the API has EVER returned a lead status this session.
-// Gates queue revalidation so we don't burn an extra API call per popup
-// open while the backend is still legacy-only.
+// Tracks whether the API has EVER returned a lead status. Gates queue
+// revalidation so we don't burn an extra API call per popup open while the
+// backend is still legacy-only. Persisted so a background reload (MV2
+// suspension, Thunderbird restart) doesn't silently disable revalidation
+// until the next lucky scan.
+const STATUS_SEEN_KEY = 'statusSeen:v1';
 let statusModeSeen = false;
+browser.storage.local.get(STATUS_SEEN_KEY)
+  .then(r => { if (r[STATUS_SEEN_KEY]) statusModeSeen = true; })
+  .catch(() => {});
 
 // --- API call ---------------------------------------------------------------
 async function checkEmails(emails) {
@@ -756,6 +818,7 @@ async function checkEmails(emails) {
     const parsed = parseCheckResponse(data, statusMode === 'off');
     if (!statusModeSeen && Object.values(parsed).some(p => p.status !== null)) {
       statusModeSeen = true;
+      browser.storage.local.set({ [STATUS_SEEN_KEY]: true }).catch(() => {});
     }
     // `results` (raw) kept for backward compatibility — the popup's legacy
     // numeric filter still reads it. `parsed` is the normalized dual-mode map.
@@ -941,7 +1004,7 @@ async function detectManuscriptSignal(msgHeader) {
 
   // Body URL scan — re-uses the existing MIME walk + HTML strip path.
   try {
-    const full = await browser.messages.getFull(msgHeader.id);
+    const full = await getFullCached(msgHeader);
     const bodyText = collectBodyText(full);
     const host = extractTransferLinkHost(bodyText);
     if (host) {
@@ -982,7 +1045,7 @@ async function extractEmailsFromMessage(msgHeader) {
     for (const e of bccList)    addIfNew(e, 'bcc');
 
     try {
-      const full = await browser.messages.getFull(msgHeader.id);
+      const full = await getFullCached(msgHeader);
       const bodyText = collectBodyText(full);
       const bodyEmails = extractEmailsFromText(bodyText);
       for (const e of bodyEmails) addIfNew(e, 'body');
@@ -1278,6 +1341,33 @@ function invalidateAllCache() {
   badgeCache.clear();
 }
 
+// Short-lived cache of full MIME trees. One "view message then open popup"
+// sequence used to trigger up to FOUR messages.getFull() re-parses of the
+// same message (extractEmailsFromMessage + detectManuscriptSignal, each run
+// again by the popup path). Message content never changes, so a 30s TTL is
+// safe and collapses those into one parse. Rejections are evicted so a
+// transient failure doesn't poison the window.
+const fullMessageCache = new Map(); // cacheKey -> { promise, expiresAt }
+const FULL_CACHE_TTL_MS = 30 * 1000;
+
+function getFullCached(msgHeader) {
+  const key = cacheKey(msgHeader);
+  const now = Date.now();
+  const hit = fullMessageCache.get(key);
+  if (hit && hit.expiresAt > now) return hit.promise;
+  const promise = browser.messages.getFull(msgHeader.id);
+  fullMessageCache.set(key, { promise, expiresAt: now + FULL_CACHE_TTL_MS });
+  promise.catch(() => {
+    const cur = fullMessageCache.get(key);
+    if (cur && cur.promise === promise) fullMessageCache.delete(key);
+  });
+  if (fullMessageCache.size > 20) {
+    const firstKey = fullMessageCache.keys().next().value;
+    fullMessageCache.delete(firstKey);
+  }
+  return promise;
+}
+
 async function updateBadgeForTab(tabId, count, opts = {}) {
   try {
     // This function owns the ICON swap (active ring vs. default) for the
@@ -1321,7 +1411,14 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
       let queueLen = 0;
       try {
         const { enabled } = await getConfig();
-        queueLen = enabled ? (await getQueue()).length : 0;
+        // Use the cached length when available (kept fresh by
+        // refreshBadgeCount on every queue mutation) — avoids a queue read
+        // per tooltip recomposition during fast navigation.
+        if (enabled) {
+          queueLen = lastKnownQueueLen !== null
+            ? lastKnownQueueLen
+            : (await getQueue()).length;
+        }
       } catch (e) { /* fall through to 0 — idle title */ }
       // Badge already carries the count — the tooltip should just describe
       // what those items are, not repeat "N" next to the "N" on the badge.
@@ -1437,17 +1534,10 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       return;
     }
 
-    // Load all per-message AND per-email state in one parallel batch.
-    // - opened/dismissed: per-message-id — suppress on this message
-    // - marked/terminal: per-email — legacy-mode cross-message suppression
-    // - pending: per-email — status-mode bridge while the API lags a Mark click
-    const [opened, dismissed, marked, terminal, pending] = await Promise.all([
-      getOpened(headerMessageId),
-      getDismissed(headerMessageId),
-      getMarkedFor(addresses),
-      getTerminalFor(addresses),
-      getPendingFor(addresses)
-    ]);
+    // Load the full suppression-state batch and delegate every per-email
+    // decision to decideActionable — the single suppression matrix shared
+    // with the enqueue recheck and the popup count.
+    const state = await getLeadStateFor(addresses, headerMessageId);
     if (!stillValid()) return;
 
     const parsed = result.parsed || {};
@@ -1457,25 +1547,7 @@ async function scanAndBadgeMessage(tab, msgHeader) {
       const lower = addr.toLowerCase();
       const p = parsed[lower];
       if (!p || !p.exists) continue;
-
-      let actionable;
-      if (p.status !== null) {
-        // STATUS MODE — the API status is the truth for this email.
-        // Terminal statuses end the marking lifecycle; 'response' needs no
-        // action unless a manuscript arrived; 'no_response' + incoming email
-        // is exactly the moment to mark "Response".
-        if (p.status === 'manuscript_received' || p.status === 'rejected') continue;
-        if (opened[lower] || dismissed[lower]) continue;   // per-message suppress
-        if (pending[lower]) continue;                       // just-marked bridge
-        actionable = p.status === 'no_response' || manuscriptSignal.has;
-      } else {
-        // LEGACY MODE — current v1.19 behavior, unchanged.
-        if (terminal[lower]) continue;                          // forever-suppress
-        if (opened[lower] || dismissed[lower]) continue;        // per-message suppress
-        if (marked[lower] && !manuscriptSignal.has) continue;   // marked, no manuscript
-        actionable = true;
-      }
-      if (!actionable) continue;
+      if (!decideActionable(lower, p.status, manuscriptSignal.has, state)) continue;
 
       leadCount++;
       if (headerMessageId) {
@@ -1616,7 +1688,33 @@ browser.runtime.onMessage.addListener((message) => {
     case 'getDisplayedMessageEmails': return getDisplayedMessageEmails(message.tabId);
     case 'getComposeEmails':          return getComposeEmails(message.tabId);
     case 'openInV4':                  return openInV4(message.email, message.headerMessageId, !!message.terminal);
-    case 'getOpened':                 return getOpened(message.headerMessageId).then(o => ({ opened: o }));
+    // Central per-lead evaluation for the popup: returns actionability (the
+    // SAME decideActionable matrix used by the scan loop and enqueue recheck)
+    // plus the opened/pending flags the popup needs for button/chip rendering.
+    // One IPC + one state batch instead of popup-side matrix reimplementation
+    // — popup-side drift is how the marked-lead ring contradiction happened.
+    case 'evaluateLeads': {
+      const leads = Array.isArray(message.leads) ? message.leads : [];
+      const emails = leads.map(l => String(l && l.email || '').toLowerCase()).filter(Boolean);
+      return getLeadStateFor(emails, message.headerMessageId || null).then(state => {
+        const evaluation = {};
+        for (const l of leads) {
+          if (!l || !l.email) continue;
+          const lower = String(l.email).toLowerCase();
+          evaluation[lower] = {
+            actionable: decideActionable(
+              lower,
+              l.leadStatus !== undefined ? l.leadStatus : null,
+              !!message.manuscriptHas,
+              state
+            ),
+            opened: !!state.opened[lower],
+            pending: !!state.pending[lower]
+          };
+        }
+        return { evaluation };
+      });
+    }
     // Called by the popup after it has its own fresh result. We verify that
     // the tab still shows the message the popup computed against, and that
     // the extension is still enabled, so a stale/background popup can't set
@@ -1638,16 +1736,12 @@ browser.runtime.onMessage.addListener((message) => {
         .catch(() => {})
         .then(() => getQueue())
         .then(queue => ({ queue }));
-    // Live pendingMark entries for a set of emails — popup uses this for the
-    // "Updating…" chip variant and to exclude just-marked leads from counts.
-    case 'getPendingFor':
-      return getPendingFor(message.emails || []).then(pending => ({ pending }));
-    // Legacy / internal-style: just remove an entry without marking dismissed.
-    // The popup uses 'dismissFromQueue' for user-initiated dismissal so the
-    // same row doesn't re-enter after the 5-min badge cache expires.
-    case 'removeFromQueue':
-      return removeFromQueue({ email: message.email })
-        .then(() => getQueue()).then(queue => ({ queue }));
+    // User-initiated dismissal: writes dismissed:v1 (so the row doesn't
+    // re-enter after the 5-min badge cache expires) then removes the row.
+    // There is deliberately NO bare 'removeFromQueue' route and no separate
+    // 'getOpened'/'getPendingFor' routes — the popup gets opened/pending via
+    // 'evaluateLeads', and removal without the dismissed:v1 write would
+    // recreate the re-queue bug.
     case 'dismissFromQueue':
       return markDismissed(message.headerMessageId, message.email)
         .then(() => removeFromQueue({ email: message.email }))
