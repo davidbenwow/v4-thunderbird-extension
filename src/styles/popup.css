@@ -171,10 +171,9 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   background: var(--ink-50);
-  border-top: 1px solid var(--ink-200);
-  border-bottom: 1px solid var(--ink-200);
+  border-bottom: 1px solid var(--ink-100);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -248,6 +247,41 @@ header h1 {
   font-size: 11px;
   color: var(--ink-400);
   font-weight: 500;
+}
+
+/* External-link arrow inside navigating buttons. */
+.ext-arrow {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-left: 1px;
+}
+
+/* Manuscript badge: neutral capsule with a document glyph and the detected
+   filename / transfer host. Informational — deliberately not colored. */
+.ms-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  max-width: 100%;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-500);
+  background: var(--ink-100);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.ms-badge .ms-glyph {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.ms-badge .ms-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Diagnostics lines on the settings page. */

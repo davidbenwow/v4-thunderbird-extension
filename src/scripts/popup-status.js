@@ -43,6 +43,12 @@
     }
   }
 
+  // Every button in this popup NAVIGATES (opens V4 in the browser) — none
+  // completes an action in place. The arrow makes that honest at a glance.
+  function extArrow() {
+    return el('span', 'ext-arrow', '\u2197');
+  }
+
   function el(tag, className, textContent) {
     const e = document.createElement(tag);
     if (className) e.className = className;
@@ -67,6 +73,7 @@
       markIcon.alt = '';
       markBtn.appendChild(markIcon);
       markBtn.appendChild(el('span', 'mark-label', 'Mark lead in V4'));
+      markBtn.appendChild(extArrow());
       markBtn.classList.remove('opened');
       markBtn.title = 'Open this lead in V4 to mark its status';
     }
@@ -84,6 +91,7 @@
     markIcon.alt = '';
     markBtn.appendChild(markIcon);
     markBtn.appendChild(el('span', 'mark-label', 'Mark as manuscript received'));
+    markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
     markBtn.classList.add('manuscript');
     markBtn.title = 'Open this lead in V4 and mark their status as manuscript received.';
@@ -100,6 +108,7 @@
     markIcon.alt = '';
     markBtn.appendChild(markIcon);
     markBtn.appendChild(el('span', 'mark-label', 'Mark as response'));
+    markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
     markBtn.title = 'Open this lead in V4 and mark their status as response.';
   }
@@ -109,6 +118,7 @@
   function setOpenOnlyButtonState(markBtn) {
     while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
     markBtn.appendChild(el('span', 'mark-label', 'Open in V4'));
+    markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
     markBtn.classList.add('secondary');
     markBtn.title = 'Open this lead in V4 (no action needed right now).';
@@ -133,16 +143,39 @@
     return title;
   }
 
-  // Builds the optional 📄 indicator span. Returns null if no signal.
-  function makeManuscriptIcon(signal) {
+  // Small document glyph (inline SVG, currentColor) — no emoji in chrome:
+  // emoji render inconsistently across platforms and can't be tinted.
+  function makeDocGlyph() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'ms-glyph');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const d of ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6']) {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill', 'none');
+      p.setAttribute('stroke', 'currentColor');
+      p.setAttribute('stroke-width', '2');
+      p.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(p);
+    }
+    return svg;
+  }
+
+  // Manuscript badge: shows WHAT was detected (the filename or transfer host)
+  // in a neutral capsule — it informs without competing with the status for
+  // color. The tooltip keeps the honest hedge: detection is a guess.
+  function makeManuscriptBadge(signal) {
     if (!signal || !signal.has) return null;
-    const docIcon = document.createElement('span');
-    docIcon.className = 'manuscript-icon';
-    docIcon.textContent = '📄 ';
-    docIcon.title = signal.type === 'attachment'
-      ? 'Possible manuscript attached: ' + signal.detail
-      : 'Possible manuscript transfer link: ' + signal.detail;
-    return docIcon;
+    const badge = el('span', 'ms-badge');
+    badge.appendChild(makeDocGlyph());
+    const detail = String(signal.detail || 'document');
+    badge.appendChild(el('span', 'ms-name', detail.length > 34 ? detail.slice(0, 31) + '…' : detail));
+    badge.title = signal.type === 'attachment'
+      ? 'Possible manuscript attached: ' + detail
+      : 'Possible manuscript transfer link: ' + detail;
+    return badge;
   }
 
   function makeCopyBtn(address) {
@@ -164,9 +197,9 @@
     // clicking the button only opens V4; nothing is hidden optimistically.
     // Email is demoted to a quiet subtitle.
     if (leadStatus !== null) {
+      // No colored stripe: the colored status text + dot already carry the
+      // state; one signal, not three.
       const row = el('div', 'lead-row');
-      const meta = STATUS_META[leadStatus] || STATUS_META.no_response;
-      row.style.borderLeft = `3px solid ${meta.border}`;
 
       const main = el('div', 'lead-row-main');
       const text = el('div', 'lead-text');
@@ -177,8 +210,6 @@
 
       if (!opts.hideSubtitle) {
         const sub = el('div', 'lead-subtitle');
-        const docIcon = makeManuscriptIcon(currentManuscriptSignal);
-        if (docIcon) sub.appendChild(docIcon);
         sub.appendChild(el('span', 'sub-email', address));
         // 'sender' is the default/obvious case — annotating it is just noise.
         // Other sources (recipient, Cc, found in thread) ARE worth flagging.
@@ -189,6 +220,10 @@
         sub.title = address;
         text.appendChild(sub);
       }
+      // Manuscript badge as its own quiet line — message-level evidence for
+      // why the action button says what it says.
+      const badge = makeManuscriptBadge(currentManuscriptSignal);
+      if (badge) text.appendChild(badge);
       main.appendChild(text);
       row.appendChild(main);
 
@@ -224,10 +259,7 @@
     const main = el('div', 'lead-row-main');
     const text = el('div', 'lead-text');
 
-    const emailDiv = el('div', 'lead-email');
-    const docIcon = makeManuscriptIcon(currentManuscriptSignal);
-    if (docIcon) emailDiv.appendChild(docIcon);
-    emailDiv.appendChild(document.createTextNode(address));
+    const emailDiv = el('div', 'lead-email', address);
     emailDiv.title = address;
     text.appendChild(emailDiv);
 
@@ -236,6 +268,8 @@
       metaDiv.appendChild(el('span', 'source-hint', SOURCE_LABELS[source] || source));
       text.appendChild(metaDiv);
     }
+    const legacyBadge = makeManuscriptBadge(currentManuscriptSignal);
+    if (legacyBadge) text.appendChild(legacyBadge);
 
     main.appendChild(text);
     row.appendChild(main);
@@ -264,18 +298,16 @@
     return h;
   }
 
-  // Identity header for the single-lead view: LEAD <email> [📄] [source] [copy].
+  // Identity header for the single-lead view: LEAD <email> [source] [copy].
   // The email is WHO this popup is about — it belongs in the header line, not
   // buried in the row competing with the status. The copy button sits next to
   // the email it copies.
-  function makeLeadHeader({ address, source }, manuscriptSignal) {
+  function makeLeadHeader({ address, source }) {
     const h = el('div', 'section-header');
     h.appendChild(el('span', 'section-label', 'Lead'));
     const emailSpan = el('span', 'section-lead-email', address);
     emailSpan.title = address;
     h.appendChild(emailSpan);
-    const docIcon = makeManuscriptIcon(manuscriptSignal);
-    if (docIcon) h.appendChild(docIcon);
     if (source && source !== 'sender') {
       h.appendChild(el('span', 'section-lead-source', SOURCE_LABELS[source] || source));
     }
@@ -466,7 +498,7 @@
     if (single && single.leadStatus !== null) {
       // One status-mode lead (the overwhelmingly common case): identity in
       // the header, labeled status + action in the row.
-      ui.leadsSection.appendChild(makeLeadHeader(single, currentManuscriptSignal));
+      ui.leadsSection.appendChild(makeLeadHeader(single));
       const ev = evaluation[single.address.toLowerCase()] || {};
       ui.leadsSection.appendChild(makeLeadRow(
         single, single.statusCode, !!ev.opened, currentManuscriptSignal,
