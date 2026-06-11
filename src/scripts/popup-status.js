@@ -49,6 +49,28 @@
     return el('span', 'ext-arrow', '\u2197');
   }
 
+  // Vector pencil for the mark buttons. Inline SVG in currentColor: inherits
+  // the button's orange and stays sharp at any DPI — unlike the old 32px
+  // raster logo, which blurred when downscaled into a 14px slot.
+  function makePencilGlyph() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'mark-glyph');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const d of ['M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16v4', 'M13.5 6.5l4 4']) {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill', 'none');
+      p.setAttribute('stroke', 'currentColor');
+      p.setAttribute('stroke-width', '2');
+      p.setAttribute('stroke-linecap', 'round');
+      p.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(p);
+    }
+    return svg;
+  }
+
   function el(tag, className, textContent) {
     const e = document.createElement(tag);
     if (className) e.className = className;
@@ -67,11 +89,7 @@
       markBtn.classList.add('opened');
       markBtn.title = 'Open again in V4';
     } else {
-      const markIcon = document.createElement('img');
-      markIcon.className = 'mark-icon';
-      markIcon.src = 'images/icon-32.png';
-      markIcon.alt = '';
-      markBtn.appendChild(markIcon);
+      markBtn.appendChild(makePencilGlyph());
       markBtn.appendChild(el('span', 'mark-label', 'Mark lead in V4'));
       markBtn.appendChild(extArrow());
       markBtn.classList.remove('opened');
@@ -85,11 +103,7 @@
   // resurface from any future message.
   function setManuscriptButtonState(markBtn) {
     while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
-    const markIcon = document.createElement('img');
-    markIcon.className = 'mark-icon';
-    markIcon.src = 'images/icon-32.png';
-    markIcon.alt = '';
-    markBtn.appendChild(markIcon);
+    markBtn.appendChild(makePencilGlyph());
     markBtn.appendChild(el('span', 'mark-label', 'Mark as manuscript received'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
@@ -102,11 +116,7 @@
   // moment the team's workflow says to mark "Response" in the CRM.
   function setResponseButtonState(markBtn) {
     while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
-    const markIcon = document.createElement('img');
-    markIcon.className = 'mark-icon';
-    markIcon.src = 'images/icon-32.png';
-    markIcon.alt = '';
-    markBtn.appendChild(markIcon);
+    markBtn.appendChild(makePencilGlyph());
     markBtn.appendChild(el('span', 'mark-label', 'Mark as response'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');

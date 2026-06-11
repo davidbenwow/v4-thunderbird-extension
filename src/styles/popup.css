@@ -434,10 +434,10 @@ header h1 {
   outline-offset: 2px;
 }
 
-.mark-icon {
-  width: 16px;
-  height: 16px;
-  display: block;
+.mark-glyph {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .mark-label { line-height: 1.3; }
