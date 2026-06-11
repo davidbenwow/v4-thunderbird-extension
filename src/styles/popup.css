@@ -250,37 +250,60 @@ header h1 {
   font-weight: 500;
 }
 
-/* ========== V4 lead-status chips (status mode) ======================= */
-/* Rendered in the lead-meta line when the API returns a per-lead status.
-   Same restrained palette as the row accents; chip-updating is the local
-   "user just clicked Mark, API hasn't caught up" variant. */
-.status-chip {
-  display: inline-flex;
+/* ========== V4 lead-status headline (status mode) ==================== */
+/* The status is the row's primary line — bold colored text with a matching
+   dot; the row also gets a left border in the same color (set inline). The
+   email is demoted to .lead-subtitle below. */
+.lead-status-title {
+  display: flex;
   align-items: center;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  line-height: 1.6;
-  white-space: nowrap;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
 }
 
-.chip-gray  { background: var(--ink-100);       color: var(--ink-500);  }
-.chip-blue  { background: #eff6ff;              color: #2563eb;         }
-.chip-green { background: var(--status-ok-bg);  color: var(--status-ok); }
-.chip-red   { background: var(--status-used-bg); color: var(--status-used); }
-
-.chip-updating {
-  background: var(--brand-100);
-  color: var(--brand-600);
-  animation: chip-pulse 1.6s ease-in-out infinite;
+.lead-status-title .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
+
+.st-gray  { color: var(--ink-500); }       .st-gray  .dot { background: var(--ink-400); }
+.st-blue  { color: #2563eb; }              .st-blue  .dot { background: #2563eb; }
+.st-green { color: var(--status-ok); }     .st-green .dot { background: var(--status-ok); }
+.st-red   { color: var(--status-used); }   .st-red   .dot { background: var(--status-used); }
+.st-brand { color: var(--brand-600); }     .st-brand .dot { background: var(--brand-500); }
+
+.st-brand { animation: chip-pulse 1.6s ease-in-out infinite; }
 
 @keyframes chip-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.55; }
 }
+
+/* Demoted email + source line under the status headline. */
+.lead-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  min-width: 0;
+}
+
+.sub-email {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-400);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub-sep    { color: var(--ink-300); font-size: 11px; }
+.sub-source { color: var(--ink-300); font-size: 11px; font-weight: 500; }
+.lead-subtitle .manuscript-icon { font-size: 12px; }
 
 /* ========== Action area ============================================= */
 .lead-row-actions {

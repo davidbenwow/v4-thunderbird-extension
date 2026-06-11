@@ -83,10 +83,10 @@
     markIcon.src = 'images/icon-32.png';
     markIcon.alt = '';
     markBtn.appendChild(markIcon);
-    markBtn.appendChild(el('span', 'mark-label', 'Manuscript received'));
+    markBtn.appendChild(el('span', 'mark-label', 'Mark as Manuscript received'));
     markBtn.classList.remove('opened');
     markBtn.classList.add('manuscript');
-    markBtn.title = 'Mark this lead as Manuscript received in V4 — stops further reminders.';
+    markBtn.title = 'Open this lead in V4 and mark their status as Manuscript received.';
   }
 
   // Status-mode variants. "Mark as Response" is the call-to-action when the
@@ -114,23 +114,25 @@
     markBtn.title = 'Open this lead in V4 (no action needed right now).';
   }
 
-  // V4 status chip — rendered in the lead-meta line when the API returns a
-  // lead status. 'updating' is the local variant shown while a pendingMark
-  // bridge is live (the user just clicked Mark; the API hasn't caught up).
-  const STATUS_CHIPS = {
-    no_response:         { label: 'No response yet',     cls: 'chip-gray'     },
-    response:            { label: 'Responded',           cls: 'chip-blue'     },
-    manuscript_received: { label: 'Manuscript received', cls: 'chip-green'    },
-    rejected:            { label: 'Rejected',            cls: 'chip-red'      },
-    locked:              { label: 'Locked',              cls: 'chip-gray'     },
-    invalid_email:       { label: 'Invalid email',       cls: 'chip-red'      },
-    updating:            { label: 'Updating…',           cls: 'chip-updating' }
+  // V4 lead-status metadata: the status is now the ROW HEADLINE (status mode),
+  // shown as bold colored text with a matching dot + left border. 'updating'
+  // is the transient state shown while a Mark click is propagating to V4.
+  const STATUS_META = {
+    no_response:         { label: 'No response yet',     cls: 'st-gray',  border: '#8592a6' },
+    response:            { label: 'Responded',           cls: 'st-blue',  border: '#2563eb' },
+    manuscript_received: { label: 'Manuscript received', cls: 'st-green', border: '#16a34a' },
+    rejected:            { label: 'Rejected',            cls: 'st-red',   border: '#dc2626' },
+    locked:              { label: 'Locked',              cls: 'st-gray',  border: '#8592a6' },
+    invalid_email:       { label: 'Invalid email',       cls: 'st-red',   border: '#dc2626' },
+    updating:            { label: 'Updating…',           cls: 'st-brand', border: '#e7741b' }
   };
 
-  function makeStatusChip(statusKey) {
-    const def = STATUS_CHIPS[statusKey];
-    if (!def) return null;
-    return el('span', `status-chip ${def.cls}`, def.label);
+  function makeStatusTitle(statusKey) {
+    const meta = STATUS_META[statusKey] || STATUS_META.no_response;
+    const title = el('div', `lead-status-title ${meta.cls}`);
+    title.appendChild(el('span', 'dot'));
+    title.appendChild(document.createTextNode(meta.label));
+    return title;
   }
 
   // Builds the optional 📄 indicator span. Returns null if no signal.
@@ -145,11 +147,78 @@
     return docIcon;
   }
 
+  function makeCopyBtn(address) {
+    const copyBtn = el('button', 'icon-btn copy-btn', '📋');
+    copyBtn.dataset.email = address;
+    copyBtn.title = 'Copy email';
+    return copyBtn;
+  }
+
   // leadStatus: normalized V4 status string or null (legacy mode).
-  // isPending: a Mark click for this email is in the bridge window — show
-  // "Updating…" instead of the (stale) API status.
+  // isPending: a Mark click for this email is propagating to V4 — show the
+  // "Updating…" headline until the live status confirms it.
   function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, isPending) {
-    const s = STATUS[statusCode];
+    const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
+
+    // ---- STATUS MODE: the V4 status is the headline AND the source of truth.
+    // The button is driven by the real status, not the local "opened" guess —
+    // if the lead is still no_response, the action stays available even if we
+    // optimistically flipped it last time; the API confirms what actually
+    // happened. Email is demoted to a quiet subtitle.
+    if (leadStatus !== null) {
+      const row = el('div', 'lead-row');
+      const shownKey = isPending ? 'updating' : leadStatus;
+      const meta = STATUS_META[shownKey] || STATUS_META.no_response;
+      row.style.borderLeft = `3px solid ${meta.border}`;
+
+      const main = el('div', 'lead-row-main');
+      const text = el('div', 'lead-text');
+      text.appendChild(makeStatusTitle(shownKey));
+
+      const sub = el('div', 'lead-subtitle');
+      const docIcon = makeManuscriptIcon(currentManuscriptSignal);
+      if (docIcon) sub.appendChild(docIcon);
+      sub.appendChild(el('span', 'sub-email', address));
+      if (source) {
+        sub.appendChild(el('span', 'sub-sep', '·'));
+        sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
+      }
+      sub.title = address;
+      text.appendChild(sub);
+      main.appendChild(text);
+      row.appendChild(main);
+
+      const actions = el('div', 'lead-row-actions');
+      const markBtn = el('button', 'mark-btn');
+      markBtn.dataset.email = address;
+      markBtn.dataset.statusMode = '1';
+
+      const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
+                             leadStatus === 'locked' || leadStatus === 'invalid_email';
+      if (isPending) {
+        // Just acted; the click is propagating — offer only "Open in V4" so
+        // the user doesn't re-fire the same mark before V4 catches up.
+        setOpenOnlyButtonState(markBtn);
+      } else if (terminalStatus) {
+        setOpenOnlyButtonState(markBtn);
+      } else if (manuscriptHas) {
+        markBtn.dataset.terminal = '1';
+        setManuscriptButtonState(markBtn);   // "Mark as Manuscript received"
+      } else if (leadStatus === 'no_response') {
+        setResponseButtonState(markBtn);      // "Mark as Response"
+      } else {                                 // response, no manuscript
+        setOpenOnlyButtonState(markBtn);
+      }
+      actions.appendChild(markBtn);
+      actions.appendChild(makeCopyBtn(address));
+      row.appendChild(actions);
+      return row;
+    }
+
+    // ---- LEGACY MODE (no status from the API): email headline + the local
+    // "opened" guess, exactly as before. Only reached with the kill-switch on
+    // or when the API omits a status for an address.
+    const s = STATUS[statusCode] || STATUS[3];
     const row = el('div', `lead-row ${s.className}`);
 
     const main = el('div', 'lead-row-main');
@@ -162,51 +231,28 @@
     emailDiv.title = address;
     text.appendChild(emailDiv);
 
-    const metaDiv = el('div', 'lead-meta');
     if (source) {
+      const metaDiv = el('div', 'lead-meta');
       metaDiv.appendChild(el('span', 'source-hint', SOURCE_LABELS[source] || source));
+      text.appendChild(metaDiv);
     }
-    // Status chip (status mode only). pendingMark overrides the API status —
-    // the user just acted; showing the stale status would contradict them.
-    // Guard on leadStatus so legacy rows never get a chip, even if a caller
-    // passes isPending for a legacy lead.
-    const chip = leadStatus === null ? null : makeStatusChip(isPending ? 'updating' : leadStatus);
-    if (chip) metaDiv.appendChild(chip);
-    if (metaDiv.childNodes.length) text.appendChild(metaDiv);
 
     main.appendChild(text);
     row.appendChild(main);
 
     const actions = el('div', 'lead-row-actions');
-    // Non-actionable statuses (lifecycle ended, lead locked, invalid address)
-    // still get a button — the muted "Open in V4" — so the user can always
-    // jump to the lead's CRM page even when there's nothing to mark.
-    const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
-                           leadStatus === 'locked' || leadStatus === 'invalid_email';
-
     const markBtn = el('button', 'mark-btn');
     markBtn.dataset.email = address;
-    if (terminalStatus) {
-      setOpenOnlyButtonState(markBtn);
-    } else if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
-      // Manuscript signal → terminal mark, both modes.
+    if (manuscriptHas && !isOpened) {
       markBtn.dataset.terminal = '1';
       setManuscriptButtonState(markBtn);
     } else if (isOpened) {
       setButtonState(markBtn, true);
-    } else if (leadStatus === 'no_response') {
-      setResponseButtonState(markBtn);
-    } else if (leadStatus === 'response') {
-      setOpenOnlyButtonState(markBtn);
     } else {
-      setButtonState(markBtn, false);  // legacy
+      setButtonState(markBtn, false);
     }
     actions.appendChild(markBtn);
-
-    const copyBtn = el('button', 'icon-btn copy-btn', '📋');
-    copyBtn.dataset.email = address;
-    copyBtn.title = 'Copy email';
-    actions.appendChild(copyBtn);
+    actions.appendChild(makeCopyBtn(address));
 
     row.appendChild(actions);
     return row;
@@ -239,21 +285,23 @@
         show('error');
         return;
       }
-      // Flip this button to the persisted "opened" state. The background has
-      // already saved it to storage, so reopening the popup keeps the state.
-      setButtonState(markBtn, true);
       markBtn.classList.remove('dispatching');
-      // Status mode: the API status is now stale for this lead (the user is
-      // about to change it in V4). Swap the chip to "Updating…" so the UI
-      // doesn't contradict the user's own action.
-      try {
-        const rowEl = markBtn.closest('.lead-row');
-        const chipEl = rowEl && rowEl.querySelector('.status-chip');
-        if (chipEl) {
-          const updated = makeStatusChip('updating');
-          if (updated) chipEl.replaceWith(updated);
-        }
-      } catch (e) { /* cosmetic only */ }
+      if (markBtn.dataset.statusMode === '1') {
+        // Status mode: don't claim "done" — the live status is the source of
+        // truth and will confirm on the next scan/reopen. Show a transient
+        // "Updating…" headline and demote the button so the same mark isn't
+        // re-fired before V4 catches up.
+        try {
+          const rowEl = markBtn.closest('.lead-row');
+          const titleEl = rowEl && rowEl.querySelector('.lead-status-title');
+          if (titleEl) titleEl.replaceWith(makeStatusTitle('updating'));
+          if (rowEl) rowEl.style.borderLeft = `3px solid ${STATUS_META.updating.border}`;
+        } catch (e) { /* cosmetic only */ }
+        setOpenOnlyButtonState(markBtn);
+      } else {
+        // Legacy mode: the local "opened" guess is the only signal we have.
+        setButtonState(markBtn, true);
+      }
       return;
     }
 
