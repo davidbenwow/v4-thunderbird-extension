@@ -153,10 +153,15 @@
 
   function makeStatusTitle(statusKey) {
     const meta = STATUS_META[statusKey] || STATUS_META.no_response;
-    const title = el('div', `lead-status-title ${meta.cls}`);
-    title.appendChild(el('span', 'dot'));
-    title.appendChild(document.createTextNode(meta.label));
-    return title;
+    // Soft pill (tinted bg + colored text), NOT V4's filled style: filled
+    // pills read as buttons, and the status is state, not action. The tint
+    // still echoes the V4 button that set this status (green/blue/red).
+    const wrap = el('div', 'status-pill-wrap');
+    const pill = el('span', `status-pill ${meta.cls}`);
+    pill.appendChild(el('span', 'dot'));
+    pill.appendChild(document.createTextNode(meta.label));
+    wrap.appendChild(pill);
+    return wrap;
   }
 
   // Small document glyph (inline SVG, currentColor) — no emoji in chrome:

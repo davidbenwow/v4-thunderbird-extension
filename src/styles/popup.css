@@ -364,40 +364,48 @@ header h1 {
   user-select: none;
 }
 
-/* ========== V4 lead-status headline (status mode) ==================== */
-/* The status is the row's primary line — bold colored text with a matching
-   dot; the row also gets a left border in the same color (set inline). The
-   email is demoted to .lead-subtitle below. */
-.lead-status-title {
-  display: flex;
+/* ========== V4 lead-status pill (status mode) ======================== */
+/* Soft pill: tinted background + colored text + dot. The tint family
+   follows V4's own button language (green = response, blue = manuscript,
+   red = rejected); soft rather than filled so it reads as STATE, not as a
+   clickable button. Text uses the darker shade of each family for
+   contrast on the tint. */
+.status-pill-wrap { line-height: 1; }
+
+.status-pill {
+  display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
 }
 
-.lead-status-title .dot {
+.status-pill .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.st-gray  { color: var(--ink-500); }       .st-gray  .dot { background: var(--ink-400); }
-/* Blue follows V4's manuscript button (sky family), darkened for text
-   contrast on white. Full language: green = response, blue = manuscript,
-   red = rejected — same as the V4 web UI. */
-.st-blue  { color: #0284c7; }              .st-blue  .dot { background: #0ea5e9; }
-.st-green { color: var(--status-ok); }     .st-green .dot { background: var(--status-ok); }
-.st-red   { color: var(--status-used); }   .st-red   .dot { background: var(--status-used); }
+.st-gray  { background: var(--ink-100); color: var(--ink-500); }
+.st-gray  .dot { background: var(--ink-400); }
+.st-blue  { background: #f0f9ff; color: #0369a1; }
+.st-blue  .dot { background: #0ea5e9; }
+.st-green { background: var(--status-ok-bg); color: #15803d; }
+.st-green .dot { background: var(--status-ok); }
+.st-red   { background: var(--status-used-bg); color: #b91c1c; }
+.st-red   .dot { background: var(--status-used); }
 
-/* Demoted email + source line under the status headline. */
+/* Demoted email + source line under the status pill. */
 .lead-subtitle {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 3px;
+  margin-top: 6px;
   min-width: 0;
 }
 
