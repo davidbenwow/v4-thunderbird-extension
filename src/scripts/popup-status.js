@@ -203,8 +203,10 @@
         setOpenOnlyButtonState(markBtn);
       } else if (manuscriptHas) {
         markBtn.dataset.terminal = '1';
+        markBtn.dataset.marks = '1';          // an actual mark action
         setManuscriptButtonState(markBtn);   // "Mark as Manuscript received"
       } else if (leadStatus === 'no_response') {
+        markBtn.dataset.marks = '1';          // an actual mark action
         setResponseButtonState(markBtn);      // "Mark as Response"
       } else {                                 // response, no manuscript
         setOpenOnlyButtonState(markBtn);
@@ -287,17 +289,22 @@
       }
       markBtn.classList.remove('dispatching');
       if (markBtn.dataset.statusMode === '1') {
-        // Status mode: don't claim "done" — the live status is the source of
-        // truth and will confirm on the next scan/reopen. Show a transient
-        // "Updating…" headline and demote the button so the same mark isn't
-        // re-fired before V4 catches up.
-        try {
-          const rowEl = markBtn.closest('.lead-row');
-          const titleEl = rowEl && rowEl.querySelector('.lead-status-title');
-          if (titleEl) titleEl.replaceWith(makeStatusTitle('updating'));
-          if (rowEl) rowEl.style.borderLeft = `3px solid ${STATUS_META.updating.border}`;
-        } catch (e) { /* cosmetic only */ }
-        setOpenOnlyButtonState(markBtn);
+        // Only an actual mark action (Mark as Response / Manuscript received)
+        // changes the lead's status — a passive "Open in V4" click does not,
+        // so it must NOT flip the headline to "Updating…". Gate on dataset.marks.
+        if (markBtn.dataset.marks === '1') {
+          // Don't claim "done" — the live status is the source of truth and
+          // will confirm on the next scan/reopen. Show a transient "Updating…"
+          // headline and demote the button so the mark isn't re-fired.
+          try {
+            const rowEl = markBtn.closest('.lead-row');
+            const titleEl = rowEl && rowEl.querySelector('.lead-status-title');
+            if (titleEl) titleEl.replaceWith(makeStatusTitle('updating'));
+            if (rowEl) rowEl.style.borderLeft = `3px solid ${STATUS_META.updating.border}`;
+          } catch (e) { /* cosmetic only */ }
+          setOpenOnlyButtonState(markBtn);
+        }
+        // Passive "Open in V4": leave the row exactly as it is.
       } else {
         // Legacy mode: the local "opened" guess is the only signal we have.
         setButtonState(markBtn, true);
