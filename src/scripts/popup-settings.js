@@ -2,15 +2,17 @@
 (function () {
   'use strict';
 
-  const apiKeyInput  = document.getElementById('api-key');
-  const saveBtn      = document.getElementById('save-btn');
-  const saveStatus   = document.getElementById('save-status');
-  const toggleBtn    = document.getElementById('toggle-btn');
+  const apiKeyInput   = document.getElementById('api-key');
+  const saveBtn       = document.getElementById('save-btn');
+  const saveStatus    = document.getElementById('save-status');
+  const toggleBtn     = document.getElementById('toggle-btn');
+  const statusModeBtn = document.getElementById('status-mode-btn');
 
   async function load() {
     const config = await browser.runtime.sendMessage({ method: 'getConfig' });
     apiKeyInput.value = config.apiKey || '';
     setToggleUI(config.enabled);
+    setStatusModeUI(config.statusMode !== 'off');
 
     // Populate the ignored-domains list (INTERNAL_DOMAINS comes from internal-domains.js)
     try {
@@ -33,6 +35,12 @@
   function setToggleUI(enabled) {
     toggleBtn.textContent = enabled ? 'ON' : 'OFF';
     toggleBtn.className   = enabled ? 'toggle-on' : 'toggle-off';
+  }
+
+  function setStatusModeUI(auto) {
+    if (!statusModeBtn) return;
+    statusModeBtn.textContent = auto ? 'ON' : 'OFF';
+    statusModeBtn.className   = auto ? 'toggle-on' : 'toggle-off';
   }
 
   saveBtn.addEventListener('click', async () => {
@@ -66,6 +74,18 @@
     });
     setToggleUI(next);
   });
+
+  if (statusModeBtn) {
+    statusModeBtn.addEventListener('click', async () => {
+      const config = await browser.runtime.sendMessage({ method: 'getConfig' });
+      const nextAuto = config.statusMode === 'off';  // flip
+      await browser.runtime.sendMessage({
+        method: 'setConfig',
+        payload: { statusMode: nextAuto ? 'auto' : 'off' }
+      });
+      setStatusModeUI(nextAuto);
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', load);
 })();

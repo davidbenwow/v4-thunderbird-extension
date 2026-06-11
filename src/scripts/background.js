@@ -3,7 +3,11 @@
 
 const STORAGE_KEYS = {
   API_KEY: 'v4pluginApiKey',
-  ENABLED: 'v4pluginEnabled'
+  ENABLED: 'v4pluginEnabled',
+  // 'auto' (default): status-aware behavior activates per email as soon as
+  // the API returns lead statuses. 'off': force legacy numeric behavior even
+  // if the API sends statuses — kill-switch in case IT ships malformed data.
+  STATUS_MODE: 'v4pluginStatusMode'
 };
 
 // Persistent per-message "opened" state. Keyed by headerMessageId (the
@@ -308,6 +312,77 @@ async function pruneStaleTerminalEntries() {
 }
 pruneStaleTerminalEntries();
 
+// --- Pending-mark bridge (status mode) ---------------------------------------
+// Written on every Mark click. The Mark button only OPENS the browser — the
+// user then edits the lead's status in the V4 web UI by hand, so the API can
+// lag minutes behind the click. While a pendingMark is live (30-min TTL), the
+// scan loop trusts the user's click over a stale API status and suppresses
+// re-queueing. Only consulted in status mode; in legacy mode marked:v1
+// (365-day TTL) covers the same ground and must not be shortened.
+// Schema: `pendingMark:v1:<email>` -> { at: <unixMs> }
+const PENDING_KEY_PREFIX = 'pendingMark:v1:';
+const PENDING_TTL_MS = 30 * 60 * 1000;
+
+function pendingKey(email) {
+  return PENDING_KEY_PREFIX + String(email).toLowerCase();
+}
+
+// Batch-fetch live (non-expired) pendingMark state for many emails.
+// Returns { lowercasedEmail: entry } — present iff pending and fresh.
+async function getPendingFor(addresses) {
+  const out = {};
+  if (!addresses || !addresses.length) return out;
+  const keys = [];
+  const indexByKey = new Map();
+  for (const addr of addresses) {
+    const lower = String(addr).toLowerCase();
+    const key = pendingKey(lower);
+    keys.push(key);
+    indexByKey.set(key, lower);
+  }
+  try {
+    const cutoff = Date.now() - PENDING_TTL_MS;
+    const result = await browser.storage.local.get(keys);
+    for (const [key, value] of Object.entries(result)) {
+      const lower = indexByKey.get(key);
+      if (lower && value && typeof value.at === 'number' && value.at >= cutoff) {
+        out[lower] = value;
+      }
+    }
+  } catch (e) { /* fall through to empty */ }
+  return out;
+}
+
+async function markPending(email) {
+  if (!email) return;
+  const key = pendingKey(email);
+  try {
+    await browser.storage.local.set({ [key]: { at: Date.now() } });
+  } catch (e) { console.debug('markPending failed:', e); }
+}
+
+// Startup prune — pendingMark entries are short-lived by design; anything
+// older than the TTL is dead weight.
+async function pruneStalePendingEntries() {
+  const cutoff = Date.now() - PENDING_TTL_MS;
+  try {
+    const all = await browser.storage.local.get(null);
+    const keysToDelete = [];
+    for (const [key, value] of Object.entries(all)) {
+      if (!key.startsWith(PENDING_KEY_PREFIX)) continue;
+      if (!value || typeof value.at !== 'number' || value.at < cutoff) {
+        keysToDelete.push(key);
+      }
+    }
+    if (keysToDelete.length) {
+      await browser.storage.local.remove(keysToDelete);
+    }
+  } catch (err) {
+    console.debug('V4 Contacts: pending prune failed', err);
+  }
+}
+pruneStalePendingEntries();
+
 // --- Recent-matches queue ---------------------------------------------------
 // Persistent user-global queue of V4 matches the user has viewed but not
 // acted on. Drives the count badge on the toolbar icon AND the "Recent
@@ -387,16 +462,18 @@ async function enqueueMatchBatch(entries, msgHeader) {
   return runUnderQueueLock(async () => {
     const list = pruneQueue(await readQueueRaw());
 
-    // Re-check marked/terminal inside the lock. Guards against a Mark click
+    // Re-check suppression state inside the lock. Guards against a Mark click
     // that landed AFTER the scan loop's Promise.all snapshot but BEFORE we
     // acquired this lock — without this, we could enqueue a row the user has
-    // already actioned ("ghost row").
+    // already actioned ("ghost row"). In status mode the bridge state
+    // (pendingMark) plays the role marked/terminal play in legacy mode.
     const emails = entries
       .filter(e => e && e.email)
       .map(e => String(e.email).toLowerCase());
-    const [marked, terminal] = await Promise.all([
+    const [marked, terminal, pending] = await Promise.all([
       getMarkedFor(emails),
-      getTerminalFor(emails)
+      getTerminalFor(emails),
+      getPendingFor(emails)
     ]);
 
     let changed = false;
@@ -404,11 +481,16 @@ async function enqueueMatchBatch(entries, msgHeader) {
       if (!entry || !entry.headerMessageId || !entry.email) continue;
       const email = String(entry.email).toLowerCase();
       const status = entry.status;
+      const leadStatus = entry.leadStatus || null;
       const newSignal = entry.manuscriptSignal || null;
 
       // Late-suppression: drop entries that became suppressed mid-scan.
-      if (terminal[email]) continue;
-      if (marked[email] && !newSignal) continue;
+      if (leadStatus !== null) {
+        if (pending[email]) continue;                 // status mode: just-marked bridge
+      } else {
+        if (terminal[email]) continue;                // legacy mode
+        if (marked[email] && !newSignal) continue;
+      }
 
       const existingIdx = list.findIndex(e => e && e.email === email);
       if (existingIdx !== -1) {
@@ -416,6 +498,8 @@ async function enqueueMatchBatch(entries, msgHeader) {
         list[existingIdx].subject          = subject;
         list[existingIdx].lastSeen         = now;
         list[existingIdx].status           = status;
+        list[existingIdx].leadStatus       = leadStatus;
+        list[existingIdx].revalidatedAt    = leadStatus !== null ? now : null;
         // Sticky: only overwrite if the new sighting carries its own signal.
         if (newSignal) list[existingIdx].manuscriptSignal = newSignal;
         changed = true;
@@ -424,6 +508,8 @@ async function enqueueMatchBatch(entries, msgHeader) {
           headerMessageId: entry.headerMessageId,
           email,
           status,
+          leadStatus,
+          revalidatedAt: leadStatus !== null ? now : null,
           subject,
           firstSeen: now,
           lastSeen: now,
@@ -452,6 +538,56 @@ async function removeFromQueue({ email }) {
     const filtered = raw.filter(e => !(e && e.email === needle));
     if (filtered.length !== raw.length) {
       await browser.storage.local.set({ [QUEUE_KEY]: filtered });
+    }
+  });
+}
+
+// --- Queue revalidation against live V4 status (status mode only) -----------
+// Re-checks queued leads against the API and drops entries that are no longer
+// actionable: terminal statuses (manuscript_received / rejected — also hedged
+// into markedTerminal:v1 locally in case the API status field ever rolls
+// back), or status 'response' with no manuscript signal. FAIL OPEN: any API
+// error keeps every entry — a network blip must never wipe reminders.
+// Throttled (≥5 min) except when forced by an explicit popup open.
+const REVALIDATE_MIN_INTERVAL_MS = 5 * 60 * 1000;
+let lastRevalidationAt = 0;
+
+async function revalidateQueue(force = false) {
+  // Pointless until the API has ever returned a status this session.
+  if (!statusModeSeen) return;
+  if (!force && Date.now() - lastRevalidationAt < REVALIDATE_MIN_INTERVAL_MS) return;
+
+  const queue = await getQueue();
+  if (!queue.length) return;
+
+  // API call OUTSIDE the queue lock — a slow network must not block
+  // enqueue/dismiss operations for seconds.
+  const result = await checkEmails(queue.map(e => e.email));
+  if (result.error) return;  // fail open
+  const parsed = result.parsed || {};
+  lastRevalidationAt = Date.now();
+
+  return runUnderQueueLock(async () => {
+    const raw = pruneQueue(await readQueueRaw());
+    const kept = [];
+    let changed = false;
+    for (const entry of raw) {
+      const p = entry && parsed[entry.email];
+      if (!p || p.status === null) { kept.push(entry); continue; }  // no status info → keep
+      if (p.status === 'manuscript_received' || p.status === 'rejected') {
+        markEmailTerminal(entry.email).catch(() => {});  // mode-flapping hedge
+        changed = true;
+        continue;  // drop
+      }
+      const hasSignal = entry.manuscriptSignal && entry.manuscriptSignal.has;
+      if (p.status === 'response' && !hasSignal) { changed = true; continue; }  // no longer actionable
+      if (entry.leadStatus !== p.status) changed = true;
+      entry.leadStatus = p.status;
+      entry.revalidatedAt = Date.now();
+      kept.push(entry);
+    }
+    if (changed || kept.length !== raw.length) {
+      await browser.storage.local.set({ [QUEUE_KEY]: kept });
     }
   });
 }
@@ -505,28 +641,100 @@ const API_URL = 'https://v4.vdm-vsg.de';
 async function getConfig() {
   const result = await browser.storage.local.get([
     STORAGE_KEYS.API_KEY,
-    STORAGE_KEYS.ENABLED
+    STORAGE_KEYS.ENABLED,
+    STORAGE_KEYS.STATUS_MODE
   ]);
   return {
-    apiKey:  result[STORAGE_KEYS.API_KEY] || '',
-    enabled: result[STORAGE_KEYS.ENABLED] !== false
+    apiKey:     result[STORAGE_KEYS.API_KEY] || '',
+    enabled:    result[STORAGE_KEYS.ENABLED] !== false,
+    statusMode: result[STORAGE_KEYS.STATUS_MODE] === 'off' ? 'off' : 'auto'
   };
 }
 
 async function setConfig(partial) {
   const payload = {};
-  if (partial.apiKey  !== undefined) payload[STORAGE_KEYS.API_KEY]  = partial.apiKey;
-  if (partial.enabled !== undefined) payload[STORAGE_KEYS.ENABLED]  = partial.enabled;
+  if (partial.apiKey     !== undefined) payload[STORAGE_KEYS.API_KEY]     = partial.apiKey;
+  if (partial.enabled    !== undefined) payload[STORAGE_KEYS.ENABLED]     = partial.enabled;
+  if (partial.statusMode !== undefined) payload[STORAGE_KEYS.STATUS_MODE] = partial.statusMode;
   return browser.storage.local.set(payload);
 }
 
+// --- API response adapter -----------------------------------------------------
+// THE ONLY CODE THAT TOUCHES THE WIRE FORMAT. The API currently returns
+// numeric existence codes ({email: 1|2|3}); IT will extend it to carry a
+// per-lead status (response / no response / manuscript received / rejected)
+// in a yet-unknown shape. Everything downstream consumes the normalized form
+// produced here:
+//   { exists: bool,
+//     status: 'no_response'|'response'|'manuscript_received'|'rejected'|null,
+//     legacyCode: 2|3 }   // numeric code for queue-row CSS; 3 when unknown
+// status === null  → legacy mode for that email (current v1.19 behavior).
+// Unknown/unmappable status values degrade to legacy — warn, never throw,
+// never guess.
+//
+// GO-DAY TODO: when IT ships the real format, extend normalizeLeadStatus /
+// parseCheckResponse here (and the URL in checkEmails if the new data is
+// behind an opt-in param). Nothing else should need to change.
+const LEAD_STATUS_ALIASES = {
+  'no_response': 'no_response', 'no response': 'no_response', 'noresponse': 'no_response',
+  'response': 'response', 'responded': 'response',
+  'manuscript_received': 'manuscript_received', 'manuscript received': 'manuscript_received',
+  'manuscript': 'manuscript_received',
+  'rejected': 'rejected', 'reject': 'rejected'
+};
+
+// Values that clearly mean "not in the database" if the API switches to strings.
+const NOT_FOUND_ALIASES = new Set(['not_found', 'not found', 'none', 'no_lead', 'unknown']);
+
+function normalizeLeadStatus(raw) {
+  if (typeof raw !== 'string') return null;
+  const key = raw.trim().toLowerCase();
+  if (LEAD_STATUS_ALIASES[key]) return LEAD_STATUS_ALIASES[key];
+  console.warn('V4 Contacts: unknown lead status from API, treating as legacy:', raw);
+  return null;
+}
+
+function parseCheckResponse(data, statusModeOff) {
+  const parsed = {};
+  if (!data || typeof data !== 'object') return parsed;
+  for (const [email, value] of Object.entries(data)) {
+    const lower = String(email).toLowerCase();
+    let entry;
+    if (typeof value === 'number') {
+      // Legacy numeric codes: 1 = not in CRM, 2/3 = lead exists.
+      entry = { exists: value === 2 || value === 3, status: null, legacyCode: value === 2 ? 2 : 3 };
+    } else if (typeof value === 'string') {
+      if (NOT_FOUND_ALIASES.has(value.trim().toLowerCase())) {
+        entry = { exists: false, status: null, legacyCode: 3 };
+      } else {
+        entry = { exists: true, status: normalizeLeadStatus(value), legacyCode: 3 };
+      }
+    } else if (value && typeof value === 'object') {
+      // Anticipated object shape: { exists?: bool, status?: string, code?: number }
+      const exists = value.exists !== undefined ? !!value.exists : true;
+      const legacyCode = (value.code === 2 || value.code === 3) ? value.code : 3;
+      entry = { exists, status: exists ? normalizeLeadStatus(value.status) : null, legacyCode };
+    } else {
+      entry = { exists: false, status: null, legacyCode: 3 };
+    }
+    if (statusModeOff) entry.status = null;  // kill-switch: force legacy handling
+    parsed[lower] = entry;
+  }
+  return parsed;
+}
+
+// Tracks whether the API has EVER returned a lead status this session.
+// Gates queue revalidation so we don't burn an extra API call per popup
+// open while the backend is still legacy-only.
+let statusModeSeen = false;
+
 // --- API call ---------------------------------------------------------------
 async function checkEmails(emails) {
-  const { apiKey, enabled } = await getConfig();
+  const { apiKey, enabled, statusMode } = await getConfig();
 
   if (!enabled)                  return { error: 'disabled' };
   if (!apiKey)                   return { error: 'not_configured' };
-  if (!emails || !emails.length) return { results: {} };
+  if (!emails || !emails.length) return { results: {}, parsed: {} };
 
   const url  = `${API_URL}/api/existence_check/${apiKey}`;
   const body = emails.map(e => `emails[]=${encodeURIComponent(e)}`).join('&');
@@ -539,7 +747,13 @@ async function checkEmails(emails) {
     });
     if (!response.ok) return { error: 'api_error', status: response.status };
     const data = await response.json();
-    return { results: data };
+    const parsed = parseCheckResponse(data, statusMode === 'off');
+    if (!statusModeSeen && Object.values(parsed).some(p => p.status !== null)) {
+      statusModeSeen = true;
+    }
+    // `results` (raw) kept for backward compatibility — the popup's legacy
+    // numeric filter still reads it. `parsed` is the normalized dual-mode map.
+    return { results: data, parsed };
   } catch (err) {
     console.error('V4 Contacts API error:', err);
     return { error: 'network_error', message: err.message };
@@ -978,9 +1192,12 @@ async function openInV4(email, headerMessageId, terminal = false) {
   // Per-EMAIL "marked" state — written on every Mark click so future scans
   // suppress this lead unless a manuscript signal arrives. Independent of
   // headerMessageId, so it survives across new messages from the same person.
+  // markPending is the status-mode bridge: it suppresses re-queueing while
+  // the API status lags behind the user's manual edit in the V4 web UI.
   let terminalSucceeded = !terminal;  // trivially "succeeded" when not requested
   if (email) {
     try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
+    await markPending(email);  // own error handling inside; never throws
     if (terminal) {
       try {
         await markEmailTerminal(email);
@@ -1215,34 +1432,52 @@ async function scanAndBadgeMessage(tab, msgHeader) {
     }
 
     // Load all per-message AND per-email state in one parallel batch.
-    // - opened/dismissed: per-message-id (existing) — suppress on this message
-    // - marked/terminal: per-email (new) — suppress across messages from this lead
-    const [opened, dismissed, marked, terminal] = await Promise.all([
+    // - opened/dismissed: per-message-id — suppress on this message
+    // - marked/terminal: per-email — legacy-mode cross-message suppression
+    // - pending: per-email — status-mode bridge while the API lags a Mark click
+    const [opened, dismissed, marked, terminal, pending] = await Promise.all([
       getOpened(headerMessageId),
       getDismissed(headerMessageId),
       getMarkedFor(addresses),
-      getTerminalFor(addresses)
+      getTerminalFor(addresses),
+      getPendingFor(addresses)
     ]);
     if (!stillValid()) return;
 
-    const results = result.results || {};
+    const parsed = result.parsed || {};
     let leadCount = 0;
     const toEnqueue = [];
     for (const addr of addresses) {
-      const status = results[addr] ?? results[addr.toLowerCase()];
-      if (status !== 2 && status !== 3) continue;
       const lower = addr.toLowerCase();
+      const p = parsed[lower];
+      if (!p || !p.exists) continue;
 
-      if (terminal[lower]) continue;                          // forever-suppress
-      if (opened[lower] || dismissed[lower]) continue;        // per-message suppress
-      if (marked[lower] && !manuscriptSignal.has) continue;   // marked, no manuscript
+      let actionable;
+      if (p.status !== null) {
+        // STATUS MODE — the API status is the truth for this email.
+        // Terminal statuses end the marking lifecycle; 'response' needs no
+        // action unless a manuscript arrived; 'no_response' + incoming email
+        // is exactly the moment to mark "Response".
+        if (p.status === 'manuscript_received' || p.status === 'rejected') continue;
+        if (opened[lower] || dismissed[lower]) continue;   // per-message suppress
+        if (pending[lower]) continue;                       // just-marked bridge
+        actionable = p.status === 'no_response' || manuscriptSignal.has;
+      } else {
+        // LEGACY MODE — current v1.19 behavior, unchanged.
+        if (terminal[lower]) continue;                          // forever-suppress
+        if (opened[lower] || dismissed[lower]) continue;        // per-message suppress
+        if (marked[lower] && !manuscriptSignal.has) continue;   // marked, no manuscript
+        actionable = true;
+      }
+      if (!actionable) continue;
 
       leadCount++;
       if (headerMessageId) {
         toEnqueue.push({
           headerMessageId,
           email: lower,
-          status,
+          status: p.legacyCode,
+          leadStatus: p.status,
           manuscriptSignal: manuscriptSignal.has ? manuscriptSignal : null
         });
       }
@@ -1326,6 +1561,10 @@ if (browser.windows && browser.windows.onFocusChanged) {
         // (the user may have just marked a lead in V4).
         badgeCache.delete(cacheKey(msgHeader));
         await scanAndBadgeMessage(activeTab, msgHeader);
+        // Status mode: refocus is the most likely moment for queue staleness
+        // (the user typically just marked a lead in the V4 browser tab).
+        // Throttled internally to ≥5 min; no-op while the API is legacy-only.
+        revalidateQueue().catch(() => {});
       } catch (e) { /* not a message tab — ignore */ }
     }, 400);
   });
@@ -1341,7 +1580,7 @@ browser.storage.onChanged.addListener(async (changes) => {
     scheduleBadgeRefresh();
   }
 
-  const settingsKeys = [STORAGE_KEYS.API_KEY, STORAGE_KEYS.ENABLED];
+  const settingsKeys = [STORAGE_KEYS.API_KEY, STORAGE_KEYS.ENABLED, STORAGE_KEYS.STATUS_MODE];
   const settingsChanged = settingsKeys.some(k => k in changes);
   if (!settingsChanged) return;
 
@@ -1385,6 +1624,18 @@ browser.runtime.onMessage.addListener((message) => {
     // automatically via storage.onChanged after any mutation.
     case 'getQueue':
       return getQueue().then(queue => ({ queue }));
+    // Status mode: refresh queue entries against live V4 statuses before the
+    // popup renders them (forced — popup open is an explicit user look).
+    // Falls back to a plain read in legacy mode or on API failure.
+    case 'revalidateQueue':
+      return revalidateQueue(true)
+        .catch(() => {})
+        .then(() => getQueue())
+        .then(queue => ({ queue }));
+    // Live pendingMark entries for a set of emails — popup uses this for the
+    // "Updating…" chip variant and to exclude just-marked leads from counts.
+    case 'getPendingFor':
+      return getPendingFor(message.emails || []).then(pending => ({ pending }));
     // Legacy / internal-style: just remove an entry without marking dismissed.
     // The popup uses 'dismissFromQueue' for user-initiated dismissal so the
     // same row doesn't re-enter after the 5-min badge cache expires.

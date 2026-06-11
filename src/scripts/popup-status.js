@@ -103,6 +103,48 @@
     markBtn.title = 'Mark this lead as Manuscript received in V4 — stops further reminders.';
   }
 
+  // Status-mode variants. "Mark as Response" is the call-to-action when the
+  // V4 status is still no_response and the lead just emailed — exactly the
+  // moment the team's workflow says to mark "Response" in the CRM.
+  function setResponseButtonState(markBtn) {
+    while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
+    const markIcon = document.createElement('img');
+    markIcon.className = 'mark-icon';
+    markIcon.src = 'images/icon-32.png';
+    markIcon.alt = '';
+    markBtn.appendChild(markIcon);
+    markBtn.appendChild(el('span', 'mark-label', 'Mark as Response'));
+    markBtn.classList.remove('opened');
+    markBtn.title = 'Open this lead in V4 and mark their status as Response.';
+  }
+
+  // Informational "Open in V4" — shown when no marking action is needed
+  // (status already 'response', no manuscript). Muted styling.
+  function setOpenOnlyButtonState(markBtn) {
+    while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
+    markBtn.appendChild(el('span', 'mark-label', 'Open in V4'));
+    markBtn.classList.remove('opened');
+    markBtn.classList.add('secondary');
+    markBtn.title = 'Open this lead in V4 (no action needed right now).';
+  }
+
+  // V4 status chip — rendered in the lead-meta line when the API returns a
+  // lead status. 'updating' is the local variant shown while a pendingMark
+  // bridge is live (the user just clicked Mark; the API hasn't caught up).
+  const STATUS_CHIPS = {
+    no_response:         { label: 'No response yet',     cls: 'chip-gray'     },
+    response:            { label: 'Responded',           cls: 'chip-blue'     },
+    manuscript_received: { label: 'Manuscript received', cls: 'chip-green'    },
+    rejected:            { label: 'Rejected',            cls: 'chip-red'      },
+    updating:            { label: 'Updating…',           cls: 'chip-updating' }
+  };
+
+  function makeStatusChip(statusKey) {
+    const def = STATUS_CHIPS[statusKey];
+    if (!def) return null;
+    return el('span', `status-chip ${def.cls}`, def.label);
+  }
+
   // Builds the optional 📄 indicator span. Returns null if no signal.
   function makeManuscriptIcon(signal) {
     if (!signal || !signal.has) return null;
@@ -115,7 +157,10 @@
     return docIcon;
   }
 
-  function makeLeadRow({ address, source }, statusCode, isOpened, currentManuscriptSignal) {
+  // leadStatus: normalized V4 status string or null (legacy mode).
+  // isPending: a Mark click for this email is in the bridge window — show
+  // "Updating…" instead of the (stale) API status.
+  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, isPending) {
     const s = STATUS[statusCode];
     const row = el('div', `lead-row ${s.className}`);
 
@@ -129,28 +174,41 @@
     emailDiv.title = address;
     text.appendChild(emailDiv);
 
+    const metaDiv = el('div', 'lead-meta');
     if (source) {
-      const metaDiv = el('div', 'lead-meta');
       metaDiv.appendChild(el('span', 'source-hint', SOURCE_LABELS[source] || source));
-      text.appendChild(metaDiv);
     }
+    // Status chip (status mode only). pendingMark overrides the API status —
+    // the user just acted; showing the stale status would contradict them.
+    const chip = makeStatusChip(isPending ? 'updating' : leadStatus);
+    if (chip) metaDiv.appendChild(chip);
+    if (metaDiv.childNodes.length) text.appendChild(metaDiv);
 
     main.appendChild(text);
     row.appendChild(main);
 
     const actions = el('div', 'lead-row-actions');
+    const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected';
 
-    const markBtn = el('button', 'mark-btn');
-    markBtn.dataset.email = address;
-    // Terminal variant only when message has a manuscript signal AND the lead
-    // hasn't already been opened (already-opened keeps the existing state UI).
-    if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
-      markBtn.dataset.terminal = '1';
-      setManuscriptButtonState(markBtn);
-    } else {
-      setButtonState(markBtn, isOpened);
+    if (!terminalStatus) {
+      const markBtn = el('button', 'mark-btn');
+      markBtn.dataset.email = address;
+      if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
+        // Manuscript signal → terminal mark, both modes.
+        markBtn.dataset.terminal = '1';
+        setManuscriptButtonState(markBtn);
+      } else if (isOpened) {
+        setButtonState(markBtn, true);
+      } else if (leadStatus === 'no_response') {
+        setResponseButtonState(markBtn);
+      } else if (leadStatus === 'response') {
+        setOpenOnlyButtonState(markBtn);
+      } else {
+        setButtonState(markBtn, false);  // legacy
+      }
+      actions.appendChild(markBtn);
     }
-    actions.appendChild(markBtn);
+    // Terminal statuses: informational row — chip says it all, no Mark button.
 
     const copyBtn = el('button', 'icon-btn copy-btn', '📋');
     copyBtn.dataset.email = address;
@@ -192,6 +250,9 @@
 
     const metaDiv = el('div', 'lead-meta');
     metaDiv.appendChild(el('span', 'source-hint', entry.email));
+    // Status chip when the entry has been seen/revalidated in status mode.
+    const chip = makeStatusChip(entry.leadStatus);
+    if (chip) metaDiv.appendChild(chip);
     text.appendChild(metaDiv);
 
     main.appendChild(text);
@@ -208,6 +269,8 @@
     if (entry.manuscriptSignal && entry.manuscriptSignal.has) {
       markBtn.dataset.terminal = '1';
       setManuscriptButtonState(markBtn);
+    } else if (entry.leadStatus === 'no_response') {
+      setResponseButtonState(markBtn);
     } else {
       setButtonState(markBtn, false);
     }
@@ -226,7 +289,10 @@
   async function renderQueue() {
     let queue = [];
     try {
-      const r = await browser.runtime.sendMessage({ method: 'getQueue' });
+      // revalidateQueue refreshes entries against live V4 statuses first
+      // (status mode only — it degrades to a plain getQueue in legacy mode
+      // and on any API failure, so reminders are never lost to a network blip).
+      const r = await browser.runtime.sendMessage({ method: 'revalidateQueue' });
       queue = (r && Array.isArray(r.queue)) ? r.queue : [];
     } catch (e) { /* best effort — leave queue hidden if IPC fails */ }
 
@@ -275,6 +341,17 @@
       // already saved it to storage, so reopening the popup keeps the state.
       setButtonState(markBtn, true);
       markBtn.classList.remove('dispatching');
+      // Status mode: the API status is now stale for this lead (the user is
+      // about to change it in V4). Swap the chip to "Updating…" so the UI
+      // doesn't contradict the user's own action.
+      try {
+        const rowEl = markBtn.closest('.lead-row');
+        const chipEl = rowEl && rowEl.querySelector('.status-chip');
+        if (chipEl) {
+          const updated = makeStatusChip('updating');
+          if (updated) chipEl.replaceWith(updated);
+        }
+      } catch (e) { /* cosmetic only */ }
       // A queue-row Mark removed the entry from the queue server-side; refresh
       // the UI so the row disappears.
       if (fromQueue) {
@@ -389,30 +466,53 @@
       return;
     }
 
+    // Dual-mode filtering: `parsed` is the normalized adapter output
+    // (exists + optional lead status). Falls back to the raw numeric map for
+    // robustness if parsed is ever missing.
+    const parsed = response.parsed || {};
     const results = response.results || {};
     const leads = [];
     for (const item of emails) {
-      const statusCode = results[item.address] ?? results[item.address.toLowerCase()];
-      if (statusCode === 2 || statusCode === 3) {
-        leads.push({ ...item, statusCode });
+      const lower = item.address.toLowerCase();
+      const p = parsed[lower];
+      if (p) {
+        if (!p.exists) continue;
+        leads.push({ ...item, statusCode: p.legacyCode, leadStatus: p.status });
+      } else {
+        const statusCode = results[item.address] ?? results[lower];
+        if (statusCode === 2 || statusCode === 3) {
+          leads.push({ ...item, statusCode, leadStatus: null });
+        }
       }
     }
 
-    // Fetch opened-state for this message so we render each button correctly.
+    // Fetch opened-state (per-message) and pendingMark bridge state (per-email)
+    // so each button and chip renders correctly.
     let opened = {};
-    if (currentHeaderMessageId) {
-      try {
-        const r = await browser.runtime.sendMessage({
-          method: 'getOpened',
-          headerMessageId: currentHeaderMessageId
-        });
-        opened = (r && r.opened) || {};
-      } catch (e) { /* best effort */ }
-    }
+    let pending = {};
+    try {
+      const [openedR, pendingR] = await Promise.all([
+        currentHeaderMessageId
+          ? browser.runtime.sendMessage({ method: 'getOpened', headerMessageId: currentHeaderMessageId })
+          : Promise.resolve({}),
+        browser.runtime.sendMessage({ method: 'getPendingFor', emails: leads.map(l => l.address) })
+      ]);
+      opened = (openedR && openedR.opened) || {};
+      pending = (pendingR && pendingR.pending) || {};
+    } catch (e) { /* best effort */ }
 
-    // Unopened leads drive the toolbar ring. Sync it — the background will
-    // verify the tab still shows this exact message before applying.
-    const unopenedCount = leads.filter(l => !opened[l.address.toLowerCase()]).length;
+    // Actionable leads drive the toolbar ring — apply the same matrix as the
+    // background scan, or the ring would glow for non-actionable messages.
+    const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
+    const isActionable = (l) => {
+      const lower = l.address.toLowerCase();
+      if (opened[lower]) return false;
+      if (l.leadStatus === null) return true;  // legacy: any unopened lead counts
+      if (l.leadStatus === 'manuscript_received' || l.leadStatus === 'rejected') return false;
+      if (pending[lower]) return false;
+      return l.leadStatus === 'no_response' || manuscriptHas;
+    };
+    const unopenedCount = leads.filter(isActionable).length;
     browser.runtime.sendMessage({
       method: 'syncBadge',
       tabId: tab.id,
@@ -435,8 +535,10 @@
     const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
     ui.leadsSection.appendChild(makeSectionHeader(title));
     for (const l of leads) {
-      const isOpened = !!opened[l.address.toLowerCase()];
-      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal));
+      const lower = l.address.toLowerCase();
+      const isOpened = !!opened[lower];
+      const isPending = !isOpened && !!pending[lower];
+      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal, isPending));
     }
     show('results');
   }

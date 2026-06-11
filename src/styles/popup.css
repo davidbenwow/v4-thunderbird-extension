@@ -250,6 +250,38 @@ header h1 {
   font-weight: 500;
 }
 
+/* ========== V4 lead-status chips (status mode) ======================= */
+/* Rendered in the lead-meta line when the API returns a per-lead status.
+   Same restrained palette as the row accents; chip-updating is the local
+   "user just clicked Mark, API hasn't caught up" variant. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.chip-gray  { background: var(--ink-100);       color: var(--ink-500);  }
+.chip-blue  { background: #eff6ff;              color: #2563eb;         }
+.chip-green { background: var(--status-ok-bg);  color: var(--status-ok); }
+.chip-red   { background: var(--status-used-bg); color: var(--status-used); }
+
+.chip-updating {
+  background: var(--brand-100);
+  color: var(--brand-600);
+  animation: chip-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes chip-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
 /* ========== Action area ============================================= */
 .lead-row-actions {
   display: flex;
@@ -332,6 +364,23 @@ header h1 {
   font-size: 11px;
   line-height: 1;
   flex-shrink: 0;
+}
+
+/* Informational "Open in V4" — no action needed, muted outline */
+.mark-btn.secondary {
+  color: var(--ink-500);
+  border-color: var(--ink-200);
+  background: var(--surface);
+}
+
+.mark-btn.secondary:hover {
+  background: var(--ink-50);
+  border-color: var(--ink-300);
+  color: var(--ink-700);
+}
+
+.mark-btn.secondary:focus-visible {
+  outline-color: var(--ink-300);
 }
 
 /* Suppress hover lift while a click is in flight */
