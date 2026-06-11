@@ -136,6 +136,8 @@
     response:            { label: 'Responded',           cls: 'chip-blue'     },
     manuscript_received: { label: 'Manuscript received', cls: 'chip-green'    },
     rejected:            { label: 'Rejected',            cls: 'chip-red'      },
+    locked:              { label: 'Locked',              cls: 'chip-gray'     },
+    invalid_email:       { label: 'Invalid email',       cls: 'chip-red'      },
     updating:            { label: 'Updating…',           cls: 'chip-updating' }
   };
 
@@ -190,7 +192,11 @@
     row.appendChild(main);
 
     const actions = el('div', 'lead-row-actions');
-    const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected';
+    // Non-actionable statuses render informationally: the chip explains why
+    // there is no Mark button (lifecycle ended, lead locked by someone else,
+    // or the address is invalid).
+    const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
+                           leadStatus === 'locked' || leadStatus === 'invalid_email';
 
     if (!terminalStatus) {
       const markBtn = el('button', 'mark-btn');

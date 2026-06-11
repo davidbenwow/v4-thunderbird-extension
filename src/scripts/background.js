@@ -409,7 +409,12 @@ function decideActionable(lower, leadStatus, manuscriptHas, state) {
     // the CRM. Without this check, a terminal-marked lead would resurface as
     // soon as the 30-min pendingMark bridge expired with the API still stale.
     if (state.terminal[lower]) return false;
-    if (leadStatus === 'manuscript_received' || leadStatus === 'rejected') return false;
+    // Non-actionable API statuses: manuscript_received / rejected end the
+    // lifecycle; locked means someone else is handling the lead right now
+    // (transient — recomputed per scan, resurfaces if the lock lifts);
+    // invalid_email means there's nothing to mark.
+    if (leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
+        leadStatus === 'locked' || leadStatus === 'invalid_email') return false;
     if (state.opened[lower] || state.dismissed[lower]) return false;   // per-message
     if (state.pending[lower]) return false;                            // just-marked bridge
     return leadStatus === 'no_response' || manuscriptHas;
@@ -634,6 +639,13 @@ async function revalidateQueue(force = false) {
         changed = true;
         continue;  // drop
       }
+      // Locked / invalid_email: drop from the queue but do NOT hedge into
+      // markedTerminal — locked is transient (lead resurfaces via a fresh
+      // scan if the lock lifts), and invalid_email may be corrected in V4.
+      if (p.status === 'locked' || p.status === 'invalid_email') {
+        changed = true;
+        continue;  // drop
+      }
       const hasSignal = entry.manuscriptSignal && entry.manuscriptSignal.has;
       if (p.status === 'response' && !hasSignal) { changed = true; continue; }  // no longer actionable
       entry.leadStatus = p.status;
@@ -743,12 +755,17 @@ async function setConfig(partial) {
 // GO-DAY TODO: when IT ships the real format, extend normalizeLeadStatus /
 // parseCheckResponse here (and the URL in checkEmails if the new data is
 // behind an opt-in param). Nothing else should need to change.
+// Canonical values per IT's spec (LeadAcquisition::RESPONSE_*), confirmed
+// live: no_response, response, manuscript_received, rejected, locked,
+// invalid_email. Tolerant aliases kept for robustness.
 const LEAD_STATUS_ALIASES = {
   'no_response': 'no_response', 'no response': 'no_response', 'noresponse': 'no_response',
   'response': 'response', 'responded': 'response',
   'manuscript_received': 'manuscript_received', 'manuscript received': 'manuscript_received',
   'manuscript': 'manuscript_received',
-  'rejected': 'rejected', 'reject': 'rejected'
+  'rejected': 'rejected', 'reject': 'rejected',
+  'locked': 'locked',
+  'invalid_email': 'invalid_email', 'invalid email': 'invalid_email'
 };
 
 // Values that clearly mean "not in the database" if the API switches to strings.
@@ -782,10 +799,22 @@ function parseCheckResponse(data, statusModeOff) {
         entry = { exists: true, status: normalizeLeadStatus(value), legacyCode: 3 };
       }
     } else if (value && typeof value === 'object') {
-      // Anticipated object shape: { exists?: bool, status?: string, code?: number }
-      const exists = value.exists !== undefined ? !!value.exists : true;
-      const legacyCode = (value.code === 2 || value.code === 3) ? value.code : 3;
-      entry = { exists, status: exists ? normalizeLeadStatus(value.status) : null, legacyCode };
+      // REAL wire shape (IT spec, confirmed live 2026-06-18) with
+      // ?include_response_status=1:
+      //   { status: 1|2|3|4, response_status?: "no_response"|"response"|
+      //     "manuscript_received"|"rejected"|"locked"|"invalid_email" }
+      // Numeric status: 1 = NOT_IN_USE (not a lead), 2 = USED,
+      // 3 = NO_RESPONSE_STATUS, 4 = DOMAIN_BLOCKED. Parity with the legacy
+      // numeric handling: only 2 and 3 count as existing leads — 1 and 4
+      // were never ringed by old clients either.
+      // response_status may be absent (e.g. status 1) → null → legacy mode.
+      const num = typeof value.status === 'number' ? value.status : null;
+      const exists = num === 2 || num === 3;
+      entry = {
+        exists,
+        status: exists ? normalizeLeadStatus(value.response_status) : null,
+        legacyCode: num === 2 ? 2 : 3
+      };
     } else {
       entry = { exists: false, status: null, legacyCode: 3 };
     }
@@ -814,7 +843,13 @@ async function checkEmails(emails) {
   if (!apiKey)                   return { error: 'not_configured' };
   if (!emails || !emails.length) return { results: {}, parsed: {} };
 
-  const url  = `${API_URL}/api/existence_check/${apiKey}`;
+  // include_response_status=1 opts into the per-lead status payload
+  // (object values instead of bare numbers). The statusMode kill-switch
+  // reverts to the bare legacy URL — a full wire-format rollback, not just
+  // client-side ignoring, in case the new payload ever misbehaves.
+  const url = statusMode === 'off'
+    ? `${API_URL}/api/existence_check/${apiKey}`
+    : `${API_URL}/api/existence_check/${apiKey}?include_response_status=1`;
   const body = emails.map(e => `emails[]=${encodeURIComponent(e)}`).join('&');
 
   try {
