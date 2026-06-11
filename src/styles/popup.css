@@ -274,14 +274,6 @@ header h1 {
 .st-blue  { color: #2563eb; }              .st-blue  .dot { background: #2563eb; }
 .st-green { color: var(--status-ok); }     .st-green .dot { background: var(--status-ok); }
 .st-red   { color: var(--status-used); }   .st-red   .dot { background: var(--status-used); }
-.st-brand { color: var(--brand-600); }     .st-brand .dot { background: var(--brand-500); }
-
-.st-brand { animation: chip-pulse 1.6s ease-in-out infinite; }
-
-@keyframes chip-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
-}
 
 /* Demoted email + source line under the status headline. */
 .lead-subtitle {

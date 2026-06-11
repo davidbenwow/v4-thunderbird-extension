@@ -295,134 +295,62 @@ async function pruneStaleTerminalEntries() {
 }
 pruneStaleTerminalEntries();
 
-// --- Pending-mark bridge (status mode) ---------------------------------------
-// Written on every Mark click. The Mark button only OPENS the browser — the
-// user then edits the lead's status in the V4 web UI by hand, so the API can
-// lag minutes behind the click. While a pendingMark is live (30-min TTL), the
-// scan loop trusts the user's click over a stale API status and suppresses
-// re-queueing. Only consulted in status mode; in legacy mode marked:v1
-// (365-day TTL) covers the same ground and must not be shortened.
-// Schema: `pendingMark:v1:<email>` -> { at: <unixMs> }
-const PENDING_KEY_PREFIX = 'pendingMark:v1:';
-const PENDING_TTL_MS = 30 * 60 * 1000;
-
-function pendingKey(email) {
-  return PENDING_KEY_PREFIX + String(email).toLowerCase();
-}
-
-// Batch-fetch live (non-expired) pendingMark state for many emails.
-// Returns { lowercasedEmail: entry } — present iff pending and fresh.
-async function getPendingFor(addresses) {
-  const out = {};
-  if (!addresses || !addresses.length) return out;
-  const keys = [];
-  const indexByKey = new Map();
-  for (const addr of addresses) {
-    const lower = String(addr).toLowerCase();
-    const key = pendingKey(lower);
-    keys.push(key);
-    indexByKey.set(key, lower);
-  }
-  try {
-    const cutoff = Date.now() - PENDING_TTL_MS;
-    const result = await browser.storage.local.get(keys);
-    for (const [key, value] of Object.entries(result)) {
-      const lower = indexByKey.get(key);
-      if (lower && value && typeof value.at === 'number' && value.at >= cutoff) {
-        out[lower] = value;
-      }
-    }
-  } catch (e) { /* fall through to empty */ }
-  return out;
-}
-
-async function markPending(email) {
-  if (!email) return;
-  const key = pendingKey(email);
-  try {
-    await browser.storage.local.set({ [key]: { at: Date.now() } });
-  } catch (e) { console.debug('markPending failed:', e); }
-}
-
-// Startup prune — pendingMark entries are short-lived by design; anything
-// older than the TTL is dead weight.
-async function pruneStalePendingEntries() {
-  const cutoff = Date.now() - PENDING_TTL_MS;
-  try {
-    const all = await startupStorageSnapshot;
-    const keysToDelete = [];
-    for (const [key, value] of Object.entries(all)) {
-      if (!key.startsWith(PENDING_KEY_PREFIX)) continue;
-      if (!value || typeof value.at !== 'number' || value.at < cutoff) {
-        keysToDelete.push(key);
-      }
-    }
-    if (keysToDelete.length) {
-      await browser.storage.local.remove(keysToDelete);
-    }
-  } catch (err) {
-    console.debug('V4 Contacts: pending prune failed', err);
-  }
-}
-pruneStalePendingEntries();
-
 // --- Central actionability decision -------------------------------------------
-// THE single implementation of the suppression matrix. Every consumer of
-// "should this lead be counted / ringed?" must call this instead of
-// reimplementing the branches — the scan loop and the popup count drifted
-// apart in v1.18–1.19 (ring contradiction on marked leads), which is exactly
-// the bug class a single decision point eliminates.
+// THE single implementation of the suppression matrix. Both consumers (the
+// scan loop and the popup count) call this so they never drift apart — that
+// drift was the v1.18–1.19 ring-contradiction bug class.
 //
-// state: { opened, dismissed, marked, terminal, pending } — per-email maps;
-//        opened/dismissed are keyed for the relevant message's headerMessageId.
+// In STATUS MODE the live V4 status is the SOLE source of truth: a lead stays
+// "to mark" until the real status actually changes. There is deliberately no
+// optimistic local suppression (no pendingMark, no per-message opened guess) —
+// clicking the button only opens V4; the status doesn't change until the user
+// completes the mark there, and the next scan reflects that. This is more
+// honest than the old 30-min bridge, which could hide a lead the user never
+// actually marked.
+//
+// state: { opened, dismissed, marked, terminal } — per-email maps; only used
+//        in LEGACY MODE (numeric-only API, kill-switch on).
 // leadStatus: normalized V4 status string, or null for legacy mode.
 // manuscriptHas: whether the relevant message carries a manuscript signal.
 function decideActionable(lower, leadStatus, manuscriptHas, state) {
   if (leadStatus !== null) {
-    // STATUS MODE — the API status is the truth for this lead, EXCEPT the
-    // local terminal mark: clicking "Manuscript received" records the user's
-    // own decision, and the API only catches up after they manually update
-    // the CRM. Without this check, a terminal-marked lead would resurface as
-    // soon as the 30-min pendingMark bridge expired with the API still stale.
-    if (state.terminal[lower]) return false;
-    // Non-actionable API statuses: manuscript_received / rejected end the
-    // lifecycle; locked means someone else is handling the lead right now
-    // (transient — recomputed per scan, resurfaces if the lock lifts);
-    // invalid_email means there's nothing to mark.
+    // STATUS MODE — status is truth, nothing else.
     if (leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
         leadStatus === 'locked' || leadStatus === 'invalid_email') return false;
-    if (state.opened[lower] || state.dismissed[lower]) return false;   // per-message
-    if (state.pending[lower]) return false;                            // just-marked bridge
     return leadStatus === 'no_response' || manuscriptHas;
   }
-  // LEGACY MODE — numeric-only API.
+  // LEGACY MODE — numeric-only API; local guesses are all we have.
   if (state.terminal[lower]) return false;                             // forever-suppress
   if (state.opened[lower] || state.dismissed[lower]) return false;     // per-message
   if (state.marked[lower] && !manuscriptHas) return false;             // marked, no manuscript
   return true;
 }
 
-// Batch-fetch every suppression-state map decideActionable needs, in one
-// parallel round. headerMessageId may be null (e.g. compose) — the
+// Batch-fetch the suppression-state maps decideActionable needs in LEGACY mode,
+// in one parallel round. headerMessageId may be null (e.g. compose) — the
 // per-message maps then come back empty, which is the correct neutral value.
 async function getLeadStateFor(addresses, headerMessageId) {
-  const [opened, dismissed, marked, terminal, pending] = await Promise.all([
+  const [opened, dismissed, marked, terminal] = await Promise.all([
     getOpened(headerMessageId),
     getDismissed(headerMessageId),
     getMarkedFor(addresses),
-    getTerminalFor(addresses),
-    getPendingFor(addresses)
+    getTerminalFor(addresses)
   ]);
-  return { opened, dismissed, marked, terminal, pending };
+  return { opened, dismissed, marked, terminal };
 }
 
-// --- v1.21 cleanup of the removed reminder queue ------------------------------
-// The cross-message reminder queue ("Still to mark in V4" list, green count
-// badge, Dismiss button) was removed in v1.21. Clear its persisted state and
-// any badge text a previous version left on the toolbar icon.
+// --- Cleanup of removed mechanisms --------------------------------------------
+// v1.21 removed the reminder queue (queue:v1, statusSeen:v1) + its badge.
+// v1.21.4 removed the optimistic pendingMark bridge — the ring now tracks the
+// real V4 status, so any leftover pendingMark:v1:* keys are dead weight.
 (async () => {
   try {
-    await browser.storage.local.remove(['queue:v1', 'statusSeen:v1']);
+    const all = await startupStorageSnapshot;
+    const toRemove = ['queue:v1', 'statusSeen:v1'];
+    for (const key of Object.keys(all)) {
+      if (key.startsWith('pendingMark:v1:')) toRemove.push(key);
+    }
+    await browser.storage.local.remove(toRemove);
   } catch (e) { /* best effort */ }
   try {
     if (typeof browser.messageDisplayAction !== 'undefined' &&
@@ -1006,22 +934,23 @@ async function openInV4(email, headerMessageId, terminal = false) {
       console.warn('markOpened failed:', e);
     }
   }
-  // Per-EMAIL "marked" state — written on every Mark click so future scans
-  // suppress this lead unless a manuscript signal arrives. Independent of
-  // headerMessageId, so it survives across new messages from the same person.
-  // markPending is the status-mode bridge: it suppresses ring re-lighting
-  // while the API status lags behind the user's manual edit in the V4 web UI.
+  // Per-EMAIL legacy suppression state (markEmail / markEmailTerminal) — only
+  // consulted in LEGACY mode. In status mode it's dead weight, but writing it
+  // means that if the kill-switch is ever flipped to legacy, the user's marks
+  // are still honored. No pendingMark anymore: the ring tracks real status, so
+  // a lead stays "to mark" until V4 actually reflects the change.
   if (email) {
     try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
-    await markPending(email);  // own error handling inside; never throws
     if (terminal) {
       try { await markEmailTerminal(email); }
       catch (e) { console.warn('markEmailTerminal failed:', e); }
     }
   }
 
-  // Kick off an icon refresh for the currently displayed message without
-  // awaiting, so the return to the caller isn't delayed.
+  // Re-scan the current message right after the click so the icon reflects the
+  // freshest status. The user hasn't completed the mark in V4 yet, so this
+  // typically keeps the ring ON (still to mark) — it's the focus-return rescan
+  // that picks up the actual status change once they've marked it.
   (async () => {
     try {
       const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -1350,10 +1279,10 @@ browser.runtime.onMessage.addListener((message) => {
     case 'getComposeEmails':          return getComposeEmails(message.tabId);
     case 'openInV4':                  return openInV4(message.email, message.headerMessageId, !!message.terminal);
     // Central per-lead evaluation for the popup: returns actionability (the
-    // SAME decideActionable matrix used by the scan loop)
-    // plus the opened/pending flags the popup needs for button/chip rendering.
-    // One IPC + one state batch instead of popup-side matrix reimplementation
-    // — popup-side drift is how the marked-lead ring contradiction happened.
+    // SAME decideActionable matrix used by the scan loop) plus the per-message
+    // opened flag the legacy popup needs. One IPC + one state batch instead of
+    // popup-side matrix reimplementation — popup-side drift is how the
+    // marked-lead ring contradiction happened.
     case 'evaluateLeads': {
       const leads = Array.isArray(message.leads) ? message.leads : [];
       const emails = leads.map(l => String(l && l.email || '').toLowerCase()).filter(Boolean);
@@ -1369,8 +1298,7 @@ browser.runtime.onMessage.addListener((message) => {
               !!message.manuscriptHas,
               state
             ),
-            opened: !!state.opened[lower],
-            pending: !!state.pending[lower]
+            opened: !!state.opened[lower]
           };
         }
         return { evaluation };

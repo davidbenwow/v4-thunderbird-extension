@@ -114,17 +114,15 @@
     markBtn.title = 'Open this lead in V4 (no action needed right now).';
   }
 
-  // V4 lead-status metadata: the status is now the ROW HEADLINE (status mode),
-  // shown as bold colored text with a matching dot + left border. 'updating'
-  // is the transient state shown while a Mark click is propagating to V4.
+  // V4 lead-status metadata: the status is the ROW HEADLINE (status mode),
+  // shown as bold colored text with a matching dot + left border.
   const STATUS_META = {
     no_response:         { label: 'No response yet',     cls: 'st-gray',  border: '#8592a6' },
     response:            { label: 'Responded',           cls: 'st-blue',  border: '#2563eb' },
     manuscript_received: { label: 'Manuscript received', cls: 'st-green', border: '#16a34a' },
     rejected:            { label: 'Rejected',            cls: 'st-red',   border: '#dc2626' },
     locked:              { label: 'Locked',              cls: 'st-gray',  border: '#8592a6' },
-    invalid_email:       { label: 'Invalid email',       cls: 'st-red',   border: '#dc2626' },
-    updating:            { label: 'Updating…',           cls: 'st-brand', border: '#e7741b' }
+    invalid_email:       { label: 'Invalid email',       cls: 'st-red',   border: '#dc2626' }
   };
 
   function makeStatusTitle(statusKey) {
@@ -155,25 +153,21 @@
   }
 
   // leadStatus: normalized V4 status string or null (legacy mode).
-  // isPending: a Mark click for this email is propagating to V4 — show the
-  // "Updating…" headline until the live status confirms it.
-  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, isPending) {
+  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal) {
     const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
 
-    // ---- STATUS MODE: the V4 status is the headline AND the source of truth.
-    // The button is driven by the real status, not the local "opened" guess —
-    // if the lead is still no_response, the action stays available even if we
-    // optimistically flipped it last time; the API confirms what actually
-    // happened. Email is demoted to a quiet subtitle.
+    // ---- STATUS MODE: the live V4 status is the headline AND the sole source
+    // of truth. The action stays available until the real status changes —
+    // clicking the button only opens V4; nothing is hidden optimistically.
+    // Email is demoted to a quiet subtitle.
     if (leadStatus !== null) {
       const row = el('div', 'lead-row');
-      const shownKey = isPending ? 'updating' : leadStatus;
-      const meta = STATUS_META[shownKey] || STATUS_META.no_response;
+      const meta = STATUS_META[leadStatus] || STATUS_META.no_response;
       row.style.borderLeft = `3px solid ${meta.border}`;
 
       const main = el('div', 'lead-row-main');
       const text = el('div', 'lead-text');
-      text.appendChild(makeStatusTitle(shownKey));
+      text.appendChild(makeStatusTitle(leadStatus));
 
       const sub = el('div', 'lead-subtitle');
       const docIcon = makeManuscriptIcon(currentManuscriptSignal);
@@ -197,18 +191,12 @@
 
       const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
                              leadStatus === 'locked' || leadStatus === 'invalid_email';
-      if (isPending) {
-        // Just acted; the click is propagating — offer only "Open in V4" so
-        // the user doesn't re-fire the same mark before V4 catches up.
-        setOpenOnlyButtonState(markBtn);
-      } else if (terminalStatus) {
+      if (terminalStatus) {
         setOpenOnlyButtonState(markBtn);
       } else if (manuscriptHas) {
         markBtn.dataset.terminal = '1';
-        markBtn.dataset.marks = '1';          // an actual mark action
         setManuscriptButtonState(markBtn);   // "Mark as Manuscript received"
       } else if (leadStatus === 'no_response') {
-        markBtn.dataset.marks = '1';          // an actual mark action
         setResponseButtonState(markBtn);      // "Mark as Response"
       } else {                                 // response, no manuscript
         setOpenOnlyButtonState(markBtn);
@@ -290,25 +278,13 @@
         return;
       }
       markBtn.classList.remove('dispatching');
-      if (markBtn.dataset.statusMode === '1') {
-        // Only an actual mark action (Mark as Response / Manuscript received)
-        // changes the lead's status — a passive "Open in V4" click does not,
-        // so it must NOT flip the headline to "Updating…". Gate on dataset.marks.
-        if (markBtn.dataset.marks === '1') {
-          // Don't claim "done" — the live status is the source of truth and
-          // will confirm on the next scan/reopen. Show a transient "Updating…"
-          // headline and demote the button so the mark isn't re-fired.
-          try {
-            const rowEl = markBtn.closest('.lead-row');
-            const titleEl = rowEl && rowEl.querySelector('.lead-status-title');
-            if (titleEl) titleEl.replaceWith(makeStatusTitle('updating'));
-            if (rowEl) rowEl.style.borderLeft = `3px solid ${STATUS_META.updating.border}`;
-          } catch (e) { /* cosmetic only */ }
-          setOpenOnlyButtonState(markBtn);
-        }
-        // Passive "Open in V4": leave the row exactly as it is.
-      } else {
-        // Legacy mode: the local "opened" guess is the only signal we have.
+      // Status mode: don't change the row optimistically. The lead stays "to
+      // mark" until the real V4 status changes — the background re-scans now
+      // and again when Thunderbird regains focus, so reopening the popup (or
+      // glancing at the ring) reflects the actual status, never a guess.
+      // Legacy mode has no status to verify against, so keep the local
+      // "opened" signal as the only available feedback.
+      if (markBtn.dataset.statusMode !== '1') {
         setButtonState(markBtn, true);
       }
       return;
@@ -413,7 +389,7 @@
     // suppression matrix the scan loop uses (decideActionable). The popup
     // deliberately does NOT reimplement the matrix — a popup-side copy is how
     // marked/terminal leads ended up re-lighting the ring after popup open.
-    // The response also carries the opened/pending flags rows render with.
+    // The response also carries the per-message opened flag (legacy mode).
     let evaluation = null;
     try {
       const r = await browser.runtime.sendMessage({
@@ -457,13 +433,8 @@
     ui.leadsSection.appendChild(makeSectionHeader(title));
     for (const l of leads) {
       const ev = evaluation[l.address.toLowerCase()] || {};
-      const isOpened = !!ev.opened;
-      // pendingMark is a status-mode concept: the "Updating…" chip replaces a
-      // stale API status. In legacy mode (leadStatus null) there is no chip
-      // at all, so pending must not surface — openInV4 writes pendingMark on
-      // every Mark click regardless of mode.
-      const isPending = !isOpened && !!ev.pending && l.leadStatus !== null;
-      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal, isPending));
+      const isOpened = !!ev.opened;  // legacy-mode only
+      ui.leadsSection.appendChild(makeLeadRow(l, l.statusCode, isOpened, currentManuscriptSignal));
     }
     show('results');
   }
