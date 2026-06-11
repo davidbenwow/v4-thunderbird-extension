@@ -8,11 +8,39 @@
   const toggleBtn     = document.getElementById('toggle-btn');
   const statusModeBtn = document.getElementById('status-mode-btn');
 
+  // Human-friendly "2 min ago" for the diagnostics line.
+  function relativeTime(ms) {
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.round(s / 60)} min ago`;
+    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+    return `${Math.round(s / 86400)} d ago`;
+  }
+
+  async function loadDiagnostics() {
+    try {
+      const versionEl = document.getElementById('diag-version');
+      if (versionEl) versionEl.textContent = browser.runtime.getManifest().version;
+      const lastEl = document.getElementById('diag-lastcheck');
+      if (lastEl) {
+        const r = await browser.storage.local.get('lastCheck:v1');
+        const lc = r['lastCheck:v1'];
+        if (lc && typeof lc.at === 'number') {
+          lastEl.textContent = lc.ok
+            ? `${relativeTime(lc.at)} ✓`
+            : `${relativeTime(lc.at)} — failed (${lc.error || 'unknown error'})`;
+          lastEl.style.color = lc.ok ? '' : '#dc2626';
+        }
+      }
+    } catch (e) { /* diagnostics are best effort */ }
+  }
+
   async function load() {
     const config = await browser.runtime.sendMessage({ method: 'getConfig' });
     apiKeyInput.value = config.apiKey || '';
     setToggleUI(config.enabled);
     setStatusModeUI(config.statusMode !== 'off');
+    loadDiagnostics();
 
     // Populate the ignored-domains list (INTERNAL_DOMAINS comes from internal-domains.js)
     try {

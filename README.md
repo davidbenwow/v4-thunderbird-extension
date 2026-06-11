@@ -1,56 +1,118 @@
-# V4 Contacts Checker — Thunderbird Extension
+# V4 Contacts Checker — Thunderbird extension
 
-A Thunderbird MailExtension that checks email addresses in displayed messages and compose windows against the V4 Contacts CRM at `https://v4.vdm-vsg.de`, and lets you jump to a lead's page to mark its status.
+A Thunderbird MailExtension for the OmniScriptum acquisitions team. It checks
+the email addresses in every displayed message against the V4 Contacts CRM
+(`https://v4.vdm-vsg.de`), shows each lead's **live CRM status** (no response /
+response / manuscript received / rejected / locked / invalid email), and offers
+the right next action — *Mark as response* or *Mark as manuscript received* —
+opening the lead in V4 so the editor can set the status there.
+
+Current version: see `src/manifest.json`. Requires Thunderbird 115+.
 
 ## For users
 
-1. Download the latest signed XPI from the [releases](./releases) folder.
-2. In Thunderbird: **Tools → Add-ons and Themes → ⚙️ (gear icon) → Install Add-on From File…** and pick the XPI.
-3. After install, go to **Add-ons and Themes → V4 Contacts Checker → Preferences** and paste your V4 API key.
+1. Download the latest XPI from
+   `https://davidbenwow.github.io/v4-thunderbird-extension/releases/` (or the
+   [releases](./releases) folder).
+2. **One-time, while builds are unsigned** (see *Signing*, below): Thunderbird →
+   Settings → Config Editor → set `xpinstall.signatures.required` to `false`,
+   then restart Thunderbird.
+3. Tools → Add-ons and Themes → ⚙ → *Install Add-on From File…* → pick the XPI.
+4. Add-ons and Themes → V4 Contacts Checker → Preferences → paste your V4 API key.
 
-Once installed, auto-updates are handled automatically — you'll get future versions without doing anything.
+After that, updates install silently — pushing a release to this repo updates
+the whole team within ~24 hours.
 
-## Features
+### What you see
 
-- Scans sender, recipients (To/Cc/Bcc), and the quoted thread body of every displayed message
-- Orange-ringed toolbar icon when the message contains leads to mark in V4
-- Popup lists leads; clicking **Mark Lead in V4** opens the V4 search page in your default browser
-- The button persists as "Opened in browser" per-message after clicking, so you can track what's done
-- Compose window support: checks recipients (including address-book contacts and mailing lists) before sending
-- Filters out internal OmniScriptum / Lambert imprint domains so they never hit the API
+- **Toolbar icon**: gray when the open message has nothing to mark; orange ring
+  when it contains a lead that needs action.
+- **Popup**: the lead's email in the header, the *current status* (live from
+  V4) as the colored headline, and the action button. A 📄 marker means the
+  message carries a likely manuscript (a `.docx`/`.doc`/`.pdf` attachment or a
+  link to a file-transfer service such as WeTransfer, Drive, Dropbox, …).
+- The action button only **opens** V4 — you still set the status in the CRM
+  itself. The extension verifies against the live status afterwards, so a lead
+  stays visible until its status really changed.
+- **Settings → Diagnostics** shows the installed version and the time/result
+  of the last V4 API contact — check there first if leads stop lighting up.
 
 ## For maintainers
 
 ### Repository layout
 
 ```
-src/                   Extension source (manifest.json, scripts/, images/, etc.)
-releases/              Human-readable list of signed XPI builds
-docs/
-  updates.json         Update manifest consumed by Thunderbird's auto-update
-  releases/            XPIs served via GitHub Pages for auto-update downloads
-scripts/
-  build.sh             Creates an unsigned XPI from src/
-  release.sh           Bumps version, builds, and updates docs/updates.json
+src/                    Extension source (MV2, plain JS, no build step)
+  scripts/background.js   Scanning, API adapter, decision matrix, state
+  scripts/popup-status.js Popup UI (status headline, action buttons)
+  scripts/popup-settings.js + popup-settings.html   Settings & diagnostics
+  scripts/internal-domains.js   Internal-imprint domains never sent to the API
+tests/run-tests.js      Zero-dependency test suite (Node `vm` + stubbed browser)
+scripts/build.sh        Tests + syntax-gate, then zips src/ into build/*.xpi
+scripts/release.sh      Bumps version, builds, prepends docs/updates.json entry
+releases/               Tracked copies of released XPIs
+docs/                   GitHub Pages root (serves the auto-update feed)
+  updates.json            Thunderbird auto-update manifest
+  releases/               XPIs downloaded by auto-update
+.github/workflows/      CI: tests + syntax + manifest/updates.json consistency
 ```
 
-### Releasing a new version
+### Architecture in five sentences
 
-1. Make your changes in `src/`
-2. Run `./scripts/release.sh 1.17.0` (or whatever new version)
-3. Submit the unsigned XPI from `build/` to addons.thunderbird.net for signing (select "self-distributed" / unlisted)
-4. Replace the XPI in `releases/` and `docs/releases/` with the signed one returned by ATN
-5. Commit everything and push
-6. Within 24 hours, every installed copy auto-updates
+`background.js` scans each displayed message, batches the addresses to
+`POST /api/existence_check/<key>?include_response_status=1`, and normalizes the
+reply in **one adapter** (`parseCheckResponse`) — the only code that touches
+the wire format. A single decision function (`decideActionable`) answers
+"does this lead need action?" for the scan loop and the popup alike; per-email
+behavior is **status-driven**: the live CRM status is the source of truth, and
+local flags only bridge the minutes between a Mark click and the CRM catching
+up (plus a full legacy fallback if the API ever stops sending statuses — also
+forceable via the *Use V4 lead status* kill-switch in Settings). Manuscript
+arrival is detected from attachments and transfer-service links and unlocks
+the *Mark as manuscript received* action. All state lives in
+`browser.storage.local` (`opened:v1:*`, `marked:v1:*`, `markedTerminal:v1:*`,
+`pendingMark:v1:*`, `lastCheck:v1`; `dismissed:v1:*` is read-only legacy).
+The API is **read-only** by IT policy — the extension never writes to V4.
 
-### How auto-update works
+### Releasing
 
-Thunderbird reads the `update_url` from the extension's `manifest.json` and periodically fetches `https://davidbenwow.github.io/v4-thunderbird-extension/updates.json`. If that JSON advertises a higher version than what's installed, Thunderbird downloads the XPI from the URL listed in the `update_link` field and installs it silently.
+```bash
+# 1. Edit src/, then:
+./scripts/release.sh 1.23.0        # runs tests, builds, updates updates.json
+cp build/v4_contacts-1.23.0.xpi releases/
+cp build/v4_contacts-1.23.0.xpi docs/releases/
+git add -A && git commit -m "Release v1.23.0: …" && git push
+# 2. GitHub Pages redeploys in ~60 s; verify:
+curl -s https://davidbenwow.github.io/v4-thunderbird-extension/updates.json | head
+# 3. Team auto-updates within ~24 h. Rollback = re-point updates.json at the
+#    previous version and push.
+```
 
-For this to work end-to-end:
-- GitHub Pages must be enabled for this repo, serving from `/docs` on `main`
-- The XPI must be **signed** by addons.thunderbird.net (unlisted signing is fine — no public listing required)
-- Every release must bump `version` in `src/manifest.json` AND add a new entry in `docs/updates.json`
+`build.sh` refuses to produce an XPI if `tests/run-tests.js` fails, any script
+fails `node --check`, or the built XPI's internal version mismatches. CI runs
+the same checks on every push.
+
+### Signing (known issue)
+
+addons.thunderbird.net's unlisted-signing pipeline has returned **unsigned
+bytes** for every submission of this add-on (v1.16.0, v1.17.0, v1.22.1 across
+April–June 2026): the dashboard says "Approved" but the downloaded XPI is
+byte-identical to the upload, with no `META-INF/`. Until Mozilla fixes it,
+team machines need `xpinstall.signatures.required=false` (set at install).
+If a future submission comes back genuinely signed (different hash +
+`META-INF/` present), ship it as a normal release and have the team re-enable
+signature enforcement.
+
+### Testing
+
+```bash
+node tests/run-tests.js   # adapter, decision matrix, manuscript detection,
+                          # email/URL extraction, internal-domain filter
+```
+
+The suite loads the real `background.js` into a Node `vm` with a stubbed
+`browser` API — no frameworks, no dependencies. Add assertions there for any
+new pure logic; UI changes still need a manual look in Thunderbird.
 
 ## License
 

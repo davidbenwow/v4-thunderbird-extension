@@ -470,6 +470,17 @@ function parseCheckResponse(data, statusModeOff) {
   return parsed;
 }
 
+// Diagnostics: record the outcome of every real API call so the settings
+// page can show "last V4 contact: 2 min ago ✓ / failed (network error)".
+// Without this, a broken key or unreachable server is invisible until a
+// user notices leads never light up. Fire-and-forget — never blocks a scan.
+const LAST_CHECK_KEY = 'lastCheck:v1';
+function recordApiOutcome(ok, error) {
+  browser.storage.local.set({
+    [LAST_CHECK_KEY]: { at: Date.now(), ok, error: error || null }
+  }).catch(() => {});
+}
+
 // --- API call ---------------------------------------------------------------
 async function checkEmails(emails) {
   const { apiKey, enabled, statusMode } = await getConfig();
@@ -493,14 +504,19 @@ async function checkEmails(emails) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
-    if (!response.ok) return { error: 'api_error', status: response.status };
+    if (!response.ok) {
+      recordApiOutcome(false, `HTTP ${response.status}`);
+      return { error: 'api_error', status: response.status };
+    }
     const data = await response.json();
     const parsed = parseCheckResponse(data, statusMode === 'off');
+    recordApiOutcome(true);
     // `results` (raw) kept for backward compatibility — the popup's legacy
     // numeric filter still reads it. `parsed` is the normalized dual-mode map.
     return { results: data, parsed };
   } catch (err) {
     console.error('V4 Contacts API error:', err);
+    recordApiOutcome(false, 'network error');
     return { error: 'network_error', message: err.message };
   }
 }

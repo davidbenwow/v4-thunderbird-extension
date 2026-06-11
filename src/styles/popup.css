@@ -250,6 +250,13 @@ header h1 {
   font-weight: 500;
 }
 
+/* Diagnostics lines on the settings page. */
+.diag-line {
+  font-size: 12px;
+  color: var(--ink-500);
+  margin: 2px 0;
+}
+
 /* ========== Single-lead identity header =============================== */
 /* LEAD <email> [📄] [source] ......... [copy] — the email is who the popup
    is about; it lives in the header so the row below is free for the labeled

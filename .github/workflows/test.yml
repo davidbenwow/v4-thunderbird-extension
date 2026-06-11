@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax checks
+        run: |
+          for f in src/scripts/*.js; do node --check "$f"; done
+      - name: Test suite
+        run: node tests/run-tests.js
+      - name: Manifest is valid JSON and versions are consistent
+        run: |
+          python3 - << 'EOF'
+          import json
+          m = json.load(open('src/manifest.json'))
+          u = json.load(open('docs/updates.json'))
+          newest = u['addons']['v4-contacts@snap-collective.com']['updates'][0]['version']
+          assert m['version'] == newest, f"manifest {m['version']} != updates.json newest {newest}"
+          print(f"OK: manifest and updates.json agree on {newest}")
+          EOF
