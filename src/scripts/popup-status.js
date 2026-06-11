@@ -107,7 +107,7 @@
     markBtn.appendChild(el('span', 'mark-label', 'Mark as manuscript received'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
-    markBtn.classList.add('manuscript');
+    markBtn.classList.add('act-manuscript');  // blue — matches V4's manuscript button
     markBtn.title = 'Open this lead in V4 and mark their status as manuscript received.';
   }
 
@@ -120,6 +120,7 @@
     markBtn.appendChild(el('span', 'mark-label', 'Mark as response'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
+    markBtn.classList.add('act-response');  // green — matches V4's response button
     markBtn.title = 'Open this lead in V4 and mark their status as response.';
   }
 
@@ -135,14 +136,19 @@
   }
 
   // V4 lead-status metadata: the status is the ROW HEADLINE (status mode),
-  // shown as bold colored text with a matching dot + left border.
+  // shown as bold colored text with a matching dot.
+  // COLOR LANGUAGE MATCHES THE V4 WEB UI's own action buttons — the team's
+  // learned mapping: GREEN = response, BLUE = manuscript, RED = rejected.
+  // (Earlier versions had green/blue swapped relative to V4 — actively
+  // misleading for anyone moving between the two tools.)
+  // invalid_email is gray, not red: red means "rejected" in this language.
   const STATUS_META = {
-    no_response:         { label: 'No response yet',     cls: 'st-gray',  border: '#8592a6' },
-    response:            { label: 'Responded',           cls: 'st-blue',  border: '#2563eb' },
-    manuscript_received: { label: 'Manuscript received', cls: 'st-green', border: '#16a34a' },
-    rejected:            { label: 'Rejected',            cls: 'st-red',   border: '#dc2626' },
-    locked:              { label: 'Locked',              cls: 'st-gray',  border: '#8592a6' },
-    invalid_email:       { label: 'Invalid email',       cls: 'st-red',   border: '#dc2626' }
+    no_response:         { label: 'No response yet',     cls: 'st-gray'  },
+    response:            { label: 'Responded',           cls: 'st-green' },
+    manuscript_received: { label: 'Manuscript received', cls: 'st-blue'  },
+    rejected:            { label: 'Rejected',            cls: 'st-red'   },
+    locked:              { label: 'Locked',              cls: 'st-gray'  },
+    invalid_email:       { label: 'Invalid email',       cls: 'st-gray'  }
   };
 
   function makeStatusTitle(statusKey) {

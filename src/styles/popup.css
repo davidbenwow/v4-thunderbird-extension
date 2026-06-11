@@ -365,7 +365,10 @@ header h1 {
 }
 
 .st-gray  { color: var(--ink-500); }       .st-gray  .dot { background: var(--ink-400); }
-.st-blue  { color: #2563eb; }              .st-blue  .dot { background: #2563eb; }
+/* Blue follows V4's manuscript button (sky family), darkened for text
+   contrast on white. Full language: green = response, blue = manuscript,
+   red = rejected — same as the V4 web UI. */
+.st-blue  { color: #0284c7; }              .st-blue  .dot { background: #0ea5e9; }
 .st-green { color: var(--status-ok); }     .st-green .dot { background: var(--status-ok); }
 .st-red   { color: var(--status-used); }   .st-red   .dot { background: var(--status-used); }
 
@@ -491,6 +494,36 @@ header h1 {
 .mark-btn.secondary:focus-visible {
   outline-color: var(--ink-300);
 }
+
+/* Mark-action buttons carry the V4 color language (green = response,
+   blue = manuscript) so the button you click here looks like the button
+   you'll click there. Text uses the darker shade for contrast; borders
+   the brighter one. */
+.mark-btn.act-response {
+  color: #15803d;
+  border-color: #16a34a;
+}
+
+.mark-btn.act-response:hover {
+  background: #f0fdf4;
+  border-color: #15803d;
+  color: #15803d;
+}
+
+.mark-btn.act-response:focus-visible { outline-color: #16a34a; }
+
+.mark-btn.act-manuscript {
+  color: #0369a1;
+  border-color: #0284c7;
+}
+
+.mark-btn.act-manuscript:hover {
+  background: #f0f9ff;
+  border-color: #0369a1;
+  color: #0369a1;
+}
+
+.mark-btn.act-manuscript:focus-visible { outline-color: #0284c7; }
 
 /* Suppress hover lift while a click is in flight */
 .mark-btn.dispatching {
