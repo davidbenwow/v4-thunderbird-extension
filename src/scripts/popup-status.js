@@ -493,7 +493,7 @@
     // deliberately does NOT reimplement the matrix — a popup-side copy is how
     // marked/terminal leads ended up re-lighting the ring after popup open.
     // The response also carries the opened/pending flags rows render with.
-    let evaluation = {};
+    let evaluation = null;
     try {
       const r = await browser.runtime.sendMessage({
         method: 'evaluateLeads',
@@ -501,15 +501,21 @@
         headerMessageId: currentHeaderMessageId,
         manuscriptHas: !!(currentManuscriptSignal && currentManuscriptSignal.has)
       });
-      evaluation = (r && r.evaluation) || {};
-    } catch (e) { /* best effort — unevaluated leads render unmarked, count 0 */ }
+      evaluation = (r && r.evaluation) || null;
+    } catch (e) { /* evaluation stays null → fail OPEN below */ }
 
     // Actionable leads drive the toolbar ring — same matrix as the scan, so
     // the ring never glows for already-marked / terminal / dismissed leads.
-    const unopenedCount = leads.filter(l => {
-      const ev = evaluation[l.address.toLowerCase()];
-      return !!(ev && ev.actionable);
-    }).length;
+    // FAIL OPEN on IPC failure (evaluation null): count every lead, exactly
+    // like v1.19.1 did when its opened-state read failed. A falsely-lit ring
+    // is an annoyance; a falsely-dark ring is a missed lead.
+    const unopenedCount = evaluation === null
+      ? leads.length
+      : leads.filter(l => {
+          const ev = evaluation[l.address.toLowerCase()];
+          return !!(ev && ev.actionable);
+        }).length;
+    if (evaluation === null) evaluation = {};
     browser.runtime.sendMessage({
       method: 'syncBadge',
       tabId: tab.id,

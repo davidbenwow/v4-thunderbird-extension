@@ -403,7 +403,12 @@ pruneStalePendingEntries();
 // manuscriptHas: whether the relevant message carries a manuscript signal.
 function decideActionable(lower, leadStatus, manuscriptHas, state) {
   if (leadStatus !== null) {
-    // STATUS MODE — the API status is the truth for this lead.
+    // STATUS MODE — the API status is the truth for this lead, EXCEPT the
+    // local terminal mark: clicking "Manuscript received" records the user's
+    // own decision, and the API only catches up after they manually update
+    // the CRM. Without this check, a terminal-marked lead would resurface as
+    // soon as the 30-min pendingMark bridge expired with the API still stale.
+    if (state.terminal[lower]) return false;
     if (leadStatus === 'manuscript_received' || leadStatus === 'rejected') return false;
     if (state.opened[lower] || state.dismissed[lower]) return false;   // per-message
     if (state.pending[lower]) return false;                            // just-marked bridge
@@ -518,6 +523,11 @@ async function enqueueMatchBatch(entries, msgHeader) {
     // lock — without this, we could enqueue a row the user just actioned
     // ("ghost row"). Includes opened/dismissed (per-message) — a mid-scan
     // Dismiss writes dismissed:v1 and must suppress here too.
+    // NOTE: this assumes all entries come from msgHeader's message (true for
+    // the only caller, scanAndBadgeMessage). If a future caller batches
+    // entries from MULTIPLE messages, the per-message opened/dismissed maps
+    // below would be wrong for the foreign entries — fetch per headerMessageId
+    // in that case.
     const emails = entries
       .filter(e => e && e.email)
       .map(e => String(e.email).toLowerCase());
