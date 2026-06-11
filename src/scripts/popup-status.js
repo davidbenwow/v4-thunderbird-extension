@@ -236,10 +236,7 @@
         sub.title = address;
         text.appendChild(sub);
       }
-      // Manuscript badge as its own quiet line — message-level evidence for
-      // why the action button says what it says.
       const badge = makeManuscriptBadge(currentManuscriptSignal);
-      if (badge) text.appendChild(badge);
       main.appendChild(text);
       row.appendChild(main);
 
@@ -250,17 +247,36 @@
 
       const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
                              leadStatus === 'locked' || leadStatus === 'invalid_email';
+      let isMarkAction = false;
       if (terminalStatus) {
         setOpenOnlyButtonState(markBtn);
       } else if (manuscriptHas) {
         markBtn.dataset.terminal = '1';
-        setManuscriptButtonState(markBtn);   // "Mark as Manuscript received"
+        setManuscriptButtonState(markBtn);   // "Mark as manuscript received"
+        isMarkAction = true;
       } else if (leadStatus === 'no_response') {
-        setResponseButtonState(markBtn);      // "Mark as Response"
+        setResponseButtonState(markBtn);      // "Mark as response"
+        isMarkAction = true;
       } else {                                 // response, no manuscript
         setOpenOnlyButtonState(markBtn);
       }
-      actions.appendChild(markBtn);
+
+      if (opts.overline) {
+        // Single-lead view: labeled two-column grammar — CURRENT STATUS on
+        // the left, NEXT ACTION over the button on the right (only when the
+        // button IS an action — labeling 'Open in V4' as an action would
+        // lie), and the manuscript pill below the button it justifies.
+        row.classList.add('labeled');
+        if (isMarkAction) {
+          actions.appendChild(el('div', 'status-overline', 'Next action'));
+        }
+        actions.appendChild(markBtn);
+        if (badge) actions.appendChild(badge);
+      } else {
+        // Compact multi-lead rows: badge stays in the text column.
+        if (badge) text.appendChild(badge);
+        actions.appendChild(markBtn);
+      }
       if (!opts.hideCopy) actions.appendChild(makeCopyBtn(address));
       row.appendChild(actions);
       return row;

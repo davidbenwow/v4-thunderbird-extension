@@ -333,6 +333,26 @@ header h1 {
   flex-shrink: 0;
 }
 
+/* Labeled single-lead row: two top-aligned columns, each with its own
+   overline — CURRENT STATUS left, NEXT ACTION right. The manuscript pill
+   right-aligns under the button it justifies. */
+.lead-row.labeled { align-items: flex-start; }
+
+.lead-row.labeled .lead-row-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+
+.lead-row.labeled .lead-row-actions .status-overline {
+  text-align: right;
+}
+
+.lead-row.labeled .ms-badge {
+  margin-top: 7px;
+  max-width: 230px;
+}
+
 /* Small uppercase label above the status headline in the single-lead view. */
 .status-overline {
   font-size: 10px;
