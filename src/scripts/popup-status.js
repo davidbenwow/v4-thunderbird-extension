@@ -192,31 +192,30 @@
     row.appendChild(main);
 
     const actions = el('div', 'lead-row-actions');
-    // Non-actionable statuses render informationally: the chip explains why
-    // there is no Mark button (lifecycle ended, lead locked by someone else,
-    // or the address is invalid).
+    // Non-actionable statuses (lifecycle ended, lead locked, invalid address)
+    // still get a button — the muted "Open in V4" — so the user can always
+    // jump to the lead's CRM page even when there's nothing to mark.
     const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
                            leadStatus === 'locked' || leadStatus === 'invalid_email';
 
-    if (!terminalStatus) {
-      const markBtn = el('button', 'mark-btn');
-      markBtn.dataset.email = address;
-      if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
-        // Manuscript signal → terminal mark, both modes.
-        markBtn.dataset.terminal = '1';
-        setManuscriptButtonState(markBtn);
-      } else if (isOpened) {
-        setButtonState(markBtn, true);
-      } else if (leadStatus === 'no_response') {
-        setResponseButtonState(markBtn);
-      } else if (leadStatus === 'response') {
-        setOpenOnlyButtonState(markBtn);
-      } else {
-        setButtonState(markBtn, false);  // legacy
-      }
-      actions.appendChild(markBtn);
+    const markBtn = el('button', 'mark-btn');
+    markBtn.dataset.email = address;
+    if (terminalStatus) {
+      setOpenOnlyButtonState(markBtn);
+    } else if (currentManuscriptSignal && currentManuscriptSignal.has && !isOpened) {
+      // Manuscript signal → terminal mark, both modes.
+      markBtn.dataset.terminal = '1';
+      setManuscriptButtonState(markBtn);
+    } else if (isOpened) {
+      setButtonState(markBtn, true);
+    } else if (leadStatus === 'no_response') {
+      setResponseButtonState(markBtn);
+    } else if (leadStatus === 'response') {
+      setOpenOnlyButtonState(markBtn);
+    } else {
+      setButtonState(markBtn, false);  // legacy
     }
-    // Terminal statuses: informational row — chip says it all, no Mark button.
+    actions.appendChild(markBtn);
 
     const copyBtn = el('button', 'icon-btn copy-btn', '📋');
     copyBtn.dataset.email = address;

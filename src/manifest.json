@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "V4 Contacts Checker",
-  "version": "1.20.0",
+  "version": "1.20.1",
   "description": "Checks whether email addresses in Thunderbird messages are already leads in V4 Contacts, and lets you jump to the lead's page in v4.vdm-vsg.de to mark it.",
   "browser_specific_settings": {
     "gecko": {
@@ -37,10 +37,10 @@
   "message_display_action": {
     "default_title": "V4 Contacts \u2014 check this message",
     "default_icon": {
-      "16": "images/icon-16.png",
-      "19": "images/icon-19.png",
-      "32": "images/icon-32.png",
-      "38": "images/icon-38.png"
+      "16": "images/icon-16-idle.png",
+      "19": "images/icon-19-idle.png",
+      "32": "images/icon-32-idle.png",
+      "38": "images/icon-38-idle.png"
     },
     "default_popup": "popup-status.html"
   },
