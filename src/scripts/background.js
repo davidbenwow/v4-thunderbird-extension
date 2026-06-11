@@ -914,11 +914,12 @@ async function getComposeEmails(tabId) {
 }
 
 // --- Open lead search in V4 -------------------------------------------------
-// `terminal: true` is set when the user marks via a row that surfaced
-// because of a manuscript signal — semantically "Manuscript received",
-// the end of the marking lifecycle for this lead. Writes markedTerminal:v1
-// in addition to the regular per-email marked:v1.
-async function openInV4(email, headerMessageId, terminal = false) {
+// `terminal: true` marks the end of the lifecycle ("Manuscript received").
+// `statusRow: true` means the click came from a status-mode row: the live V4
+// status is the only truth there, so NO local guess-state is written — the
+// lead stays "to mark" until the real status changes, and stray local flags
+// can't wrongly suppress it if the lead ever falls back to legacy handling.
+async function openInV4(email, headerMessageId, terminal = false, statusRow = false) {
   const url = `${API_URL}/system/lead/find?search_query=${encodeURIComponent(email)}`;
 
   // Dispatch to browser FIRST. If this rejects, we don't persist opened state —
@@ -926,24 +927,23 @@ async function openInV4(email, headerMessageId, terminal = false) {
   // opened even though the user never reached V4.
   await browser.windows.openDefaultBrowser(url);
 
-  // Per-message-id "opened" state — drives the per-message popup button label.
-  if (headerMessageId && email) {
-    try {
-      await markOpened(headerMessageId, email);
-    } catch (e) {
-      console.warn('markOpened failed:', e);
+  // LEGACY-MODE guess-state only. Status rows skip all of it.
+  if (!statusRow) {
+    // Per-message-id "opened" state — drives the legacy popup button label.
+    if (headerMessageId && email) {
+      try {
+        await markOpened(headerMessageId, email);
+      } catch (e) {
+        console.warn('markOpened failed:', e);
+      }
     }
-  }
-  // Per-EMAIL legacy suppression state (markEmail / markEmailTerminal) — only
-  // consulted in LEGACY mode. In status mode it's dead weight, but writing it
-  // means that if the kill-switch is ever flipped to legacy, the user's marks
-  // are still honored. No pendingMark anymore: the ring tracks real status, so
-  // a lead stays "to mark" until V4 actually reflects the change.
-  if (email) {
-    try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
-    if (terminal) {
-      try { await markEmailTerminal(email); }
-      catch (e) { console.warn('markEmailTerminal failed:', e); }
+    // Per-EMAIL legacy suppression (marked / terminal).
+    if (email) {
+      try { await markEmail(email); } catch (e) { console.debug('markEmail failed:', e); }
+      if (terminal) {
+        try { await markEmailTerminal(email); }
+        catch (e) { console.warn('markEmailTerminal failed:', e); }
+      }
     }
   }
 
@@ -1277,7 +1277,7 @@ browser.runtime.onMessage.addListener((message) => {
     case 'checkEmails':               return checkEmails(message.emails);
     case 'getDisplayedMessageEmails': return getDisplayedMessageEmails(message.tabId);
     case 'getComposeEmails':          return getComposeEmails(message.tabId);
-    case 'openInV4':                  return openInV4(message.email, message.headerMessageId, !!message.terminal);
+    case 'openInV4':                  return openInV4(message.email, message.headerMessageId, !!message.terminal, !!message.statusRow);
     // Central per-lead evaluation for the popup: returns actionability (the
     // SAME decideActionable matrix used by the scan loop) plus the per-message
     // opened flag the legacy popup needs. One IPC + one state batch instead of

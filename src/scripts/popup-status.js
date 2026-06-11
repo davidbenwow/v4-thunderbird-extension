@@ -269,7 +269,12 @@
           method: 'openInV4',
           email,
           headerMessageId: currentHeaderMessageId,
-          terminal
+          terminal,
+          // Status rows: the live V4 status is the only truth — the click
+          // must not write local legacy guess-flags (opened/marked/terminal),
+          // which could wrongly suppress the lead if it ever falls back to
+          // legacy handling.
+          statusRow: markBtn.dataset.statusMode === '1'
         });
       } catch (err) {
         markBtn.classList.remove('dispatching');
