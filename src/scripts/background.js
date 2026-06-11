@@ -1120,9 +1120,8 @@ async function updateBadgeForTab(tabId, count, opts = {}) {
         tabId
       });
     } else {
-      // Idle = grayscale. Color answers "is there something to mark HERE?";
-      // the green badge separately answers "how many pending overall?". A
-      // gray icon with a green count is the calm-but-informative idle state.
+      // Idle = grayscale. The colored ring means "this message has a lead to
+      // mark"; gray means there's nothing to act on here.
       await browser.messageDisplayAction.setIcon({
         path: {
           16: 'images/icon-16-idle.png',
