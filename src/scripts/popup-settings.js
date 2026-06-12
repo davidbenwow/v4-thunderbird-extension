@@ -22,15 +22,28 @@
       const versionEl = document.getElementById('diag-version');
       if (versionEl) versionEl.textContent = browser.runtime.getManifest().version;
       const lastEl = document.getElementById('diag-lastcheck');
-      if (lastEl) {
-        const r = await browser.storage.local.get('lastCheck:v1');
-        const lc = r['lastCheck:v1'];
-        if (lc && typeof lc.at === 'number') {
-          lastEl.textContent = lc.ok
-            ? `${relativeTime(lc.at)} ✓`
-            : `${relativeTime(lc.at)} — failed (${lc.error || 'unknown error'})`;
-          lastEl.style.color = lc.ok ? '' : '#dc2626';
-        }
+      if (!lastEl) return;
+      // lastCheck:v1 records only REAL API attempts. When the extension is
+      // off or has no key, no attempts happen — say so instead of showing a
+      // stale timestamp from before (which misleads exactly when the user
+      // is here to debug "leads stopped lighting up").
+      const config = await browser.runtime.sendMessage({ method: 'getConfig' });
+      if (config && !config.enabled) {
+        lastEl.textContent = 'extension is off — no API calls';
+        return;
+      }
+      if (config && !config.apiKey) {
+        lastEl.textContent = 'no API key configured — no API calls';
+        lastEl.style.color = '#dc2626';
+        return;
+      }
+      const r = await browser.storage.local.get('lastCheck:v1');
+      const lc = r['lastCheck:v1'];
+      if (lc && typeof lc.at === 'number') {
+        lastEl.textContent = lc.ok
+          ? `${relativeTime(lc.at)} ✓`
+          : `${relativeTime(lc.at)} — failed (${lc.error || 'unknown error'})`;
+        lastEl.style.color = lc.ok ? '' : '#dc2626';
       }
     } catch (e) { /* diagnostics are best effort */ }
   }

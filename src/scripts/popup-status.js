@@ -46,29 +46,17 @@
   // Every button in this popup NAVIGATES (opens V4 in the browser) — none
   // completes an action in place. The arrow makes that honest at a glance.
   function extArrow() {
-    return el('span', 'ext-arrow', '\u2197');
+    const a = el('span', 'ext-arrow', '\u2197');
+    a.setAttribute('aria-hidden', 'true');  // decorative; the title carries it
+    return a;
   }
 
   // Vector pencil for the mark buttons. Inline SVG in currentColor: inherits
   // the button's orange and stays sharp at any DPI — unlike the old 32px
   // raster logo, which blurred when downscaled into a 14px slot.
   function makePencilGlyph() {
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('class', 'mark-glyph');
-    svg.setAttribute('aria-hidden', 'true');
-    for (const d of ['M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16v4', 'M13.5 6.5l4 4']) {
-      const p = document.createElementNS(ns, 'path');
-      p.setAttribute('d', d);
-      p.setAttribute('fill', 'none');
-      p.setAttribute('stroke', 'currentColor');
-      p.setAttribute('stroke-width', '2');
-      p.setAttribute('stroke-linecap', 'round');
-      p.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(p);
-    }
-    return svg;
+    return makeStrokeGlyph('mark-glyph',
+      ['M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16v4', 'M13.5 6.5l4 4']);
   }
 
   function el(tag, className, textContent) {
@@ -135,24 +123,10 @@
     markBtn.title = 'Open this lead in V4 (no action needed right now).';
   }
 
-  // V4 lead-status metadata: the status is the ROW HEADLINE (status mode),
-  // shown as bold colored text with a matching dot.
-  // COLOR LANGUAGE MATCHES THE V4 WEB UI's own action buttons — the team's
-  // learned mapping: GREEN = response, BLUE = manuscript, RED = rejected.
-  // (Earlier versions had green/blue swapped relative to V4 — actively
-  // misleading for anyone moving between the two tools.)
-  // invalid_email is gray, not red: red means "rejected" in this language.
-  const STATUS_META = {
-    no_response:         { label: 'No response yet',     cls: 'st-gray'  },
-    response:            { label: 'Responded',           cls: 'st-green' },
-    manuscript_received: { label: 'Manuscript received', cls: 'st-blue'  },
-    rejected:            { label: 'Rejected',            cls: 'st-red'   },
-    locked:              { label: 'Locked',              cls: 'st-gray'  },
-    invalid_email:       { label: 'Invalid email',       cls: 'st-gray'  }
-  };
-
+  // Status labels/colors come from LEAD_STATUS_DEFS in lead-statuses.js —
+  // the single source of truth shared with the background script.
   function makeStatusTitle(statusKey) {
-    const meta = STATUS_META[statusKey] || STATUS_META.no_response;
+    const meta = LEAD_STATUS_DEFS[statusKey] || LEAD_STATUS_DEFS.no_response;
     // Soft pill (tinted bg + colored text), NOT V4's filled style: filled
     // pills read as buttons, and the status is state, not action. The tint
     // still echoes the V4 button that set this status (green/blue/red).
@@ -164,24 +138,30 @@
     return wrap;
   }
 
-  // Small document glyph (inline SVG, currentColor) — no emoji in chrome:
-  // emoji render inconsistently across platforms and can't be tinted.
-  function makeDocGlyph() {
+  // Stroke-style inline SVG glyphs in currentColor — no emoji/raster in
+  // chrome (inconsistent rendering, untintable, blurry when downscaled).
+  function makeStrokeGlyph(className, paths) {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('class', 'ms-glyph');
+    svg.setAttribute('class', className);
     svg.setAttribute('aria-hidden', 'true');
-    for (const d of ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6']) {
+    for (const d of paths) {
       const p = document.createElementNS(ns, 'path');
       p.setAttribute('d', d);
       p.setAttribute('fill', 'none');
       p.setAttribute('stroke', 'currentColor');
       p.setAttribute('stroke-width', '2');
+      p.setAttribute('stroke-linecap', 'round');
       p.setAttribute('stroke-linejoin', 'round');
       svg.appendChild(p);
     }
     return svg;
+  }
+
+  function makeDocGlyph() {
+    return makeStrokeGlyph('ms-glyph',
+      ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6']);
   }
 
   // Manuscript badge: shows WHAT was detected (the filename or transfer host)
@@ -203,14 +183,17 @@
     const copyBtn = el('button', 'icon-btn copy-btn', '📋');
     copyBtn.dataset.email = address;
     copyBtn.title = 'Copy email';
+    copyBtn.setAttribute('aria-label', 'Copy email address');
     return copyBtn;
   }
 
   // leadStatus: normalized V4 status string or null (legacy mode).
-  // opts.overline    — render a small "Current status" label above the status
-  // opts.hideSubtitle — identity lives in the section header (single-lead view)
-  // opts.hideCopy     — the copy button lives next to the email in the header
-  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, opts = {}) {
+  // layout: 'hero'    — single-lead view: identity lives in the section
+  //                     header (so no subtitle/copy here), labeled columns
+  //                     (Current status / Next action), badge under button
+  //         'compact' — multi-lead rows: subtitle + badge in the text column
+  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, layout = 'compact') {
+    const hero = layout === 'hero';
     const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
 
     // ---- STATUS MODE: the live V4 status is the headline AND the sole source
@@ -224,12 +207,12 @@
 
       const main = el('div', 'lead-row-main');
       const text = el('div', 'lead-text');
-      if (opts.overline) {
+      if (hero) {
         text.appendChild(el('div', 'status-overline', 'Current status'));
       }
       text.appendChild(makeStatusTitle(leadStatus));
 
-      if (!opts.hideSubtitle) {
+      if (!hero) {
         const sub = el('div', 'lead-subtitle');
         sub.appendChild(el('span', 'sub-email', address));
         // 'sender' is the default/obvious case — annotating it is just noise.
@@ -250,8 +233,7 @@
       markBtn.dataset.email = address;
       markBtn.dataset.statusMode = '1';
 
-      const terminalStatus = leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
-                             leadStatus === 'locked' || leadStatus === 'invalid_email';
+      const terminalStatus = isInfoOnlyStatus(leadStatus);
       let isMarkAction = false;
       if (terminalStatus) {
         setOpenOnlyButtonState(markBtn);
@@ -266,7 +248,7 @@
         setOpenOnlyButtonState(markBtn);
       }
 
-      if (opts.overline) {
+      if (hero) {
         // Single-lead view: labeled two-column grammar — CURRENT STATUS on
         // the left, NEXT ACTION over the button on the right (only when the
         // button IS an action — labeling 'Open in V4' as an action would
@@ -282,7 +264,7 @@
         if (badge) text.appendChild(badge);
         actions.appendChild(markBtn);
       }
-      if (!opts.hideCopy) actions.appendChild(makeCopyBtn(address));
+      if (!hero) actions.appendChild(makeCopyBtn(address));
       row.appendChild(actions);
       return row;
     }
@@ -367,10 +349,9 @@
           email,
           headerMessageId: currentHeaderMessageId,
           terminal,
-          // Status rows: the live V4 status is the only truth — the click
-          // must not write local legacy guess-flags (opened/marked/terminal),
-          // which could wrongly suppress the lead if it ever falls back to
-          // legacy handling.
+          // HINT only: the background decides the write policy from its
+          // own authority cache (last real API answer for this email); this
+          // dataset flag is just the fallback when that cache is cold.
           statusRow: markBtn.dataset.statusMode === '1'
         });
       } catch (err) {
@@ -399,7 +380,11 @@
         await navigator.clipboard.writeText(email);
         const orig = copyBtn.textContent;
         copyBtn.textContent = '✓';
-        setTimeout(() => { copyBtn.textContent = orig; }, 1200);
+        copyBtn.setAttribute('aria-label', 'Copied');  // announced by AT
+        setTimeout(() => {
+          copyBtn.textContent = orig;
+          copyBtn.setAttribute('aria-label', 'Copy email address');
+        }, 1200);
       } catch (err) {
         console.error('Copy failed', err);
       }
@@ -538,8 +523,7 @@
       ui.leadsSection.appendChild(makeLeadHeader(single));
       const ev = evaluation[single.address.toLowerCase()] || {};
       ui.leadsSection.appendChild(makeLeadRow(
-        single, single.statusCode, !!ev.opened, currentManuscriptSignal,
-        { overline: true, hideSubtitle: true, hideCopy: true }
+        single, single.statusCode, !!ev.opened, currentManuscriptSignal, 'hero'
       ));
     } else {
       const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;

@@ -21,10 +21,19 @@ jobs:
       - name: Manifest is valid JSON and versions are consistent
         run: |
           python3 - << 'EOF'
-          import json
+          import json, sys
           m = json.load(open('src/manifest.json'))
           u = json.load(open('docs/updates.json'))
-          newest = u['addons']['v4-contacts@snap-collective.com']['updates'][0]['version']
+          entries = u.get('addons', {}).get('v4-contacts@snap-collective.com', {}).get('updates')
+          if not isinstance(entries, list) or not entries:
+              sys.exit('updates.json is malformed: no update entries found')
+          bad = [e for e in entries if not isinstance(e, dict) or 'version' not in e or 'update_link' not in e]
+          if bad:
+              sys.exit(f'updates.json has {len(bad)} malformed entries (missing version/update_link)')
+          newest = entries[0]['version']
+          versions = [e['version'] for e in entries]
+          if sorted(versions, key=lambda v: [int(x) for x in v.split('.')], reverse=True)[0] != newest:
+              sys.exit(f'updates.json entry [0] ({newest}) is not the highest version')
           assert m['version'] == newest, f"manifest {m['version']} != updates.json newest {newest}"
-          print(f"OK: manifest and updates.json agree on {newest}")
+          print(f"OK: manifest and updates.json agree on {newest}; {len(entries)} well-formed entries")
           EOF

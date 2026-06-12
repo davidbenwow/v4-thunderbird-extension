@@ -51,12 +51,13 @@ function loadIntoContext(relPath) {
 }
 
 loadIntoContext('src/scripts/internal-domains.js');
+loadIntoContext('src/scripts/lead-statuses.js');
 loadIntoContext('src/scripts/background.js');
 
 // Top-level function declarations become globals of the vm context; they
 // close over their own script scope, so the const tables they use still work.
 const {
-  parseCheckResponse, normalizeLeadStatus, decideActionable,
+  parseCheckResponse, normalizeLeadStatus, decideActionable, isInfoOnlyStatus,
   hasManuscriptExtension, extractTransferLinkHost, extractAnchorURLs,
   collectBodyText, stripHtmlTags, extractEmailsFromText,
   extractEmailsFromVCard, isInternalEmail
@@ -69,8 +70,11 @@ function test(name, fn) {
   try { fn(); passed++; }
   catch (err) { failures.push({ name, err }); }
 }
+// Mirrors getLeadStateFor's return shape EXACTLY — if production grows a
+// new suppression map, add it here too (a fixture-only key would let tests
+// pass while the flag silently doesn't exist at runtime).
 const S = (o = {}) => Object.assign(
-  { opened: {}, dismissed: {}, marked: {}, terminal: {}, pending: {} }, o);
+  { opened: {}, dismissed: {}, marked: {}, terminal: {} }, o);
 // vm-created objects have a different realm's Object prototype, which
 // assert.deepStrictEqual rejects — JSON round-trip to plain host objects.
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -179,8 +183,33 @@ test('matrix status: live status is the truth — local guesses do NOT suppress'
   assert.strictEqual(decideActionable('a', 'no_response', false, S({ opened: { a: 1 } })), true);
   assert.strictEqual(decideActionable('a', 'no_response', false, S({ marked: { a: {} } })), true);
   assert.strictEqual(decideActionable('a', 'no_response', false, S({ terminal: { a: {} } })), true);
-  assert.strictEqual(decideActionable('a', 'no_response', false, S({ pending: { a: {} } })), true);
   assert.strictEqual(decideActionable('a', 'no_response', false, S({ dismissed: { a: 1 } })), true);
+});
+
+test('adapter: missing numeric status but recognizable response_status → lead NOT hidden', () => {
+  const p = parseCheckResponse({ 'a@x.com': { response_status: 'response' } }, false);
+  eq(p['a@x.com'], { exists: true, status: 'response', legacyCode: 3 });
+  // …but garbage-only objects still don't exist
+  const q = parseCheckResponse({ 'b@x.com': { response_status: 'gibberish' }, 'c@x.com': {} }, false);
+  assert.strictEqual(q['b@x.com'].exists, false);
+  assert.strictEqual(q['c@x.com'].exists, false);
+});
+
+test('shared defs: every canonical status has label/cls and matrix agrees with infoOnly', () => {
+  // Top-level const bindings live in the context's lexical environment, not
+  // on its global object — read them by evaluating inside the context (the
+  // browser's shared classic-script scope behaves the same way).
+  const DEFS = vm.runInContext('LEAD_STATUS_DEFS', ctx);
+  for (const s of ['no_response', 'response', 'manuscript_received', 'rejected', 'locked', 'invalid_email']) {
+    const def = DEFS ? DEFS[s] : null;
+    assert.ok(def && def.label && def.cls, `def missing for ${s}`);
+    if (isInfoOnlyStatus(s)) {
+      assert.strictEqual(decideActionable('a', s, true, S()), false, `${s} must never ring`);
+    }
+  }
+  assert.strictEqual(isInfoOnlyStatus('no_response'), false);
+  assert.strictEqual(isInfoOnlyStatus('response'), false);
+  assert.strictEqual(isInfoOnlyStatus('locked'), true);
 });
 
 // === Manuscript signal ========================================================

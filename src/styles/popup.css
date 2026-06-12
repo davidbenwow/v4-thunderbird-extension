@@ -37,6 +37,13 @@
   --status-ok-bg:   #f0fdf4;
   --status-err:     #dc2626;
 
+  /* V4 status color language (green = response, blue = manuscript,
+     red = rejected) — single palette consumed by both the status pills
+     (.st-*) and the action buttons (.act-*). */
+  --resp-700: #15803d;  --resp-500: #16a34a;  --resp-bg: #f0fdf4;
+  --manu-700: #0369a1;  --manu-500: #0ea5e9;  --manu-600: #0284c7;  --manu-bg: #f0f9ff;
+  --rej-700:  #b91c1c;  --rej-500:  #dc2626;  --rej-bg:  #fef2f2;
+
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(15, 23, 41, 0.04);
   --shadow-md: 0 2px 8px rgba(15, 23, 41, 0.08);
@@ -321,10 +328,6 @@ header h1 {
   white-space: nowrap;
 }
 
-.section-header .manuscript-icon {
-  text-transform: none;
-  font-size: 12px;
-}
 
 .section-header .icon-btn {
   width: 26px;
@@ -393,12 +396,12 @@ header h1 {
 
 .st-gray  { background: var(--ink-100); color: var(--ink-500); }
 .st-gray  .dot { background: var(--ink-400); }
-.st-blue  { background: #f0f9ff; color: #0369a1; }
-.st-blue  .dot { background: #0ea5e9; }
-.st-green { background: var(--status-ok-bg); color: #15803d; }
-.st-green .dot { background: var(--status-ok); }
-.st-red   { background: var(--status-used-bg); color: #b91c1c; }
-.st-red   .dot { background: var(--status-used); }
+.st-blue  { background: var(--manu-bg); color: var(--manu-700); }
+.st-blue  .dot { background: var(--manu-500); }
+.st-green { background: var(--resp-bg); color: var(--resp-700); }
+.st-green .dot { background: var(--resp-500); }
+.st-red   { background: var(--rej-bg); color: var(--rej-700); }
+.st-red   .dot { background: var(--rej-500); }
 
 /* Demoted email + source line under the status pill. */
 .lead-subtitle {
@@ -420,7 +423,6 @@ header h1 {
 
 .sub-sep    { color: var(--ink-300); font-size: 11px; }
 .sub-source { color: var(--ink-300); font-size: 11px; font-weight: 500; }
-.lead-subtitle .manuscript-icon { font-size: 12px; }
 
 /* ========== Action area ============================================= */
 .lead-row-actions {
@@ -528,30 +530,30 @@ header h1 {
    you'll click there. Text uses the darker shade for contrast; borders
    the brighter one. */
 .mark-btn.act-response {
-  color: #15803d;
-  border-color: #16a34a;
+  color: var(--resp-700);
+  border-color: var(--resp-500);
 }
 
 .mark-btn.act-response:hover {
-  background: #f0fdf4;
-  border-color: #15803d;
-  color: #15803d;
+  background: var(--resp-bg);
+  border-color: var(--resp-700);
+  color: var(--resp-700);
 }
 
-.mark-btn.act-response:focus-visible { outline-color: #16a34a; }
+.mark-btn.act-response:focus-visible { outline-color: var(--resp-500); }
 
 .mark-btn.act-manuscript {
-  color: #0369a1;
-  border-color: #0284c7;
+  color: var(--manu-700);
+  border-color: var(--manu-600);
 }
 
 .mark-btn.act-manuscript:hover {
-  background: #f0f9ff;
-  border-color: #0369a1;
-  color: #0369a1;
+  background: var(--manu-bg);
+  border-color: var(--manu-700);
+  color: var(--manu-700);
 }
 
-.mark-btn.act-manuscript:focus-visible { outline-color: #0284c7; }
+.mark-btn.act-manuscript:focus-visible { outline-color: var(--manu-600); }
 
 /* Suppress hover lift while a click is in flight */
 .mark-btn.dispatching {

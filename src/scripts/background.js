@@ -314,9 +314,9 @@ pruneStaleTerminalEntries();
 // manuscriptHas: whether the relevant message carries a manuscript signal.
 function decideActionable(lower, leadStatus, manuscriptHas, state) {
   if (leadStatus !== null) {
-    // STATUS MODE — status is truth, nothing else.
-    if (leadStatus === 'manuscript_received' || leadStatus === 'rejected' ||
-        leadStatus === 'locked' || leadStatus === 'invalid_email') return false;
+    // STATUS MODE — status is truth, nothing else. infoOnly statuses
+    // (defined once in lead-statuses.js) never ring.
+    if (isInfoOnlyStatus(leadStatus)) return false;
     return leadStatus === 'no_response' || manuscriptHas;
   }
   // LEGACY MODE — numeric-only API; local guesses are all we have.
@@ -401,18 +401,33 @@ async function setConfig(partial) {
 // GO-DAY TODO: when IT ships the real format, extend normalizeLeadStatus /
 // parseCheckResponse here (and the URL in checkEmails if the new data is
 // behind an opt-in param). Nothing else should need to change.
-// Canonical values per IT's spec (LeadAcquisition::RESPONSE_*), confirmed
-// live: no_response, response, manuscript_received, rejected, locked,
-// invalid_email. Tolerant aliases kept for robustness.
-const LEAD_STATUS_ALIASES = {
-  'no_response': 'no_response', 'no response': 'no_response', 'noresponse': 'no_response',
-  'response': 'response', 'responded': 'response',
-  'manuscript_received': 'manuscript_received', 'manuscript received': 'manuscript_received',
-  'manuscript': 'manuscript_received',
-  'rejected': 'rejected', 'reject': 'rejected',
-  'locked': 'locked',
-  'invalid_email': 'invalid_email', 'invalid email': 'invalid_email'
-};
+// Status vocabulary, aliases, and normalizeLeadStatus live in
+// lead-statuses.js — the single source of truth shared with the popup.
+
+// Authority cache for openInV4's write policy: the last parsed status per
+// email, from real API responses. The popup also sends a statusRow hint,
+// but the BACKGROUND decides — UI markup must not control storage
+// semantics. TTL'd so a stale view can't dictate policy forever.
+const lastParsedByEmail = new Map(); // email -> { status, at }
+const PARSED_AUTHORITY_TTL_MS = 15 * 60 * 1000;
+
+function rememberParsed(parsed) {
+  const now = Date.now();
+  for (const [email, p] of Object.entries(parsed)) {
+    lastParsedByEmail.set(email, { status: p.status, at: now });
+    if (lastParsedByEmail.size > 300) {
+      const firstKey = lastParsedByEmail.keys().next().value;
+      lastParsedByEmail.delete(firstKey);
+    }
+  }
+}
+
+// Returns 'status' | 'legacy' | null (no fresh authority).
+function authorityModeFor(email) {
+  const hit = lastParsedByEmail.get(String(email).toLowerCase());
+  if (!hit || Date.now() - hit.at > PARSED_AUTHORITY_TTL_MS) return null;
+  return hit.status !== null ? 'status' : 'legacy';
+}
 
 // Values that clearly mean "not in the database" if the API switches to strings.
 // Deliberately narrow: ambiguous values like 'unknown' must NOT be here —
@@ -420,14 +435,6 @@ const LEAD_STATUS_ALIASES = {
 // it as not-found would kill the ring/queue for a real lead. Ambiguous values
 // fall through to normalizeLeadStatus → warn + legacy degrade (exists: true).
 const NOT_FOUND_ALIASES = new Set(['not_found', 'not found', 'no_lead']);
-
-function normalizeLeadStatus(raw) {
-  if (typeof raw !== 'string') return null;
-  const key = raw.trim().toLowerCase();
-  if (LEAD_STATUS_ALIASES[key]) return LEAD_STATUS_ALIASES[key];
-  console.warn('V4 Contacts: unknown lead status from API, treating as legacy:', raw);
-  return null;
-}
 
 function parseCheckResponse(data, statusModeOff) {
   const parsed = {};
@@ -455,10 +462,16 @@ function parseCheckResponse(data, statusModeOff) {
       // were never ringed by old clients either.
       // response_status may be absent (e.g. status 1) → null → legacy mode.
       const num = typeof value.status === 'number' ? value.status : null;
-      const exists = num === 2 || num === 3;
+      const normalized = normalizeLeadStatus(value.response_status);
+      // exists: numeric 2/3 → yes; numeric 1/4 → no (parity with old
+      // clients). When the numeric field is MISSING but a recognizable
+      // response_status is present, trust the status — hiding a real lead
+      // is worse than showing one on partial data.
+      const exists = (num === 2 || num === 3) ||
+                     (num === null && normalized !== null);
       entry = {
         exists,
-        status: exists ? normalizeLeadStatus(value.response_status) : null,
+        status: exists ? normalized : null,
         legacyCode: num === 2 ? 2 : 3
       };
     } else {
@@ -474,6 +487,9 @@ function parseCheckResponse(data, statusModeOff) {
 // page can show "last V4 contact: 2 min ago ✓ / failed (network error)".
 // Without this, a broken key or unreachable server is invisible until a
 // user notices leads never light up. Fire-and-forget — never blocks a scan.
+// Deliberately written ONLY on real API attempts — disabled / missing-key
+// early returns are not contacts. The settings page reads config first and
+// shows "extension is off" / "no API key" instead of a stale timestamp.
 const LAST_CHECK_KEY = 'lastCheck:v1';
 function recordApiOutcome(ok, error) {
   browser.storage.local.set({
@@ -510,6 +526,7 @@ async function checkEmails(emails) {
     }
     const data = await response.json();
     const parsed = parseCheckResponse(data, statusMode === 'off');
+    rememberParsed(parsed);
     recordApiOutcome(true);
     // `results` (raw) kept for backward compatibility — the popup's legacy
     // numeric filter still reads it. `parsed` is the normalized dual-mode map.
@@ -680,7 +697,7 @@ async function detectManuscriptSignal(msgHeader) {
   // Attachments first — usually faster than re-reading the body.
   try {
     if (browser.messages && browser.messages.listAttachments) {
-      const attachments = await browser.messages.listAttachments(msgHeader.id);
+      const attachments = await getAttachmentsCached(msgHeader);
       if (Array.isArray(attachments)) {
         for (const att of attachments) {
           if (att && hasManuscriptExtension(att.name)) {
@@ -935,7 +952,7 @@ async function getComposeEmails(tabId) {
 // status is the only truth there, so NO local guess-state is written — the
 // lead stays "to mark" until the real status changes, and stray local flags
 // can't wrongly suppress it if the lead ever falls back to legacy handling.
-async function openInV4(email, headerMessageId, terminal = false, statusRow = false) {
+async function openInV4(email, headerMessageId, terminal = false, statusRowHint = false) {
   const url = `${API_URL}/system/lead/find?search_query=${encodeURIComponent(email)}`;
 
   // Dispatch to browser FIRST. If this rejects, we don't persist opened state —
@@ -943,8 +960,15 @@ async function openInV4(email, headerMessageId, terminal = false, statusRow = fa
   // opened even though the user never reached V4.
   await browser.windows.openDefaultBrowser(url);
 
+  // Write policy is decided HERE, from the last real API response for this
+  // email (authority cache) — popup markup must not control storage
+  // semantics. The popup's hint is only the fallback when no fresh API
+  // answer exists (e.g. the background reloaded since the popup rendered).
+  const mode = authorityModeFor(email);
+  const isStatusRow = mode !== null ? mode === 'status' : statusRowHint;
+
   // LEGACY-MODE guess-state only. Status rows skip all of it.
-  if (!statusRow) {
+  if (!isStatusRow) {
     // Per-message-id "opened" state — drives the legacy popup button label.
     if (headerMessageId && email) {
       try {
@@ -1026,6 +1050,7 @@ function invalidateAllCache() {
 // safe and collapses those into one parse. Rejections are evicted so a
 // transient failure doesn't poison the window.
 const fullMessageCache = new Map(); // cacheKey -> { promise, expiresAt }
+const attachmentsCache = new Map(); // cacheKey -> { promise, expiresAt }
 const FULL_CACHE_TTL_MS = 30 * 1000;
 
 function getFullCached(msgHeader) {
@@ -1042,6 +1067,27 @@ function getFullCached(msgHeader) {
   if (fullMessageCache.size > 20) {
     const firstKey = fullMessageCache.keys().next().value;
     fullMessageCache.delete(firstKey);
+  }
+  return promise;
+}
+
+// Same 30s cache for listAttachments — the scan and a popup open on the
+// same message each detect the manuscript signal; without this the
+// attachment listing executed twice per message view.
+function getAttachmentsCached(msgHeader) {
+  const key = cacheKey(msgHeader);
+  const now = Date.now();
+  const hit = attachmentsCache.get(key);
+  if (hit && hit.expiresAt > now) return hit.promise;
+  const promise = browser.messages.listAttachments(msgHeader.id);
+  attachmentsCache.set(key, { promise, expiresAt: now + FULL_CACHE_TTL_MS });
+  promise.catch(() => {
+    const cur = attachmentsCache.get(key);
+    if (cur && cur.promise === promise) attachmentsCache.delete(key);
+  });
+  if (attachmentsCache.size > 20) {
+    const firstKey = attachmentsCache.keys().next().value;
+    attachmentsCache.delete(firstKey);
   }
   return promise;
 }
@@ -1302,7 +1348,13 @@ browser.runtime.onMessage.addListener((message) => {
     case 'evaluateLeads': {
       const leads = Array.isArray(message.leads) ? message.leads : [];
       const emails = leads.map(l => String(l && l.email || '').toLowerCase()).filter(Boolean);
-      return getLeadStateFor(emails, message.headerMessageId || null).then(state => {
+      // The status branch of decideActionable reads no local state — fetch
+      // the four suppression maps only when at least one lead is legacy.
+      const needsState = leads.some(l => l && (l.leadStatus === null || l.leadStatus === undefined));
+      const statePromise = needsState
+        ? getLeadStateFor(emails, message.headerMessageId || null)
+        : Promise.resolve({ opened: {}, dismissed: {}, marked: {}, terminal: {} });
+      return statePromise.then(state => {
         const evaluation = {};
         for (const l of leads) {
           if (!l || !l.email) continue;

@@ -47,6 +47,7 @@ src/                    Extension source (MV2, plain JS, no build step)
   scripts/popup-status.js Popup UI (status headline, action buttons)
   scripts/popup-settings.js + popup-settings.html   Settings & diagnostics
   scripts/internal-domains.js   Internal-imprint domains never sent to the API
+  scripts/lead-statuses.js      Single source of truth for status vocabulary
 tests/run-tests.js      Zero-dependency test suite (Node `vm` + stubbed browser)
 scripts/build.sh        Tests + syntax-gate, then zips src/ into build/*.xpi
 scripts/release.sh      Bumps version, builds, prepends docs/updates.json entry
@@ -69,10 +70,13 @@ local flags only bridge the minutes between a Mark click and the CRM catching
 up (plus a full legacy fallback if the API ever stops sending statuses — also
 forceable via the *Use V4 lead status* kill-switch in Settings). Manuscript
 arrival is detected from attachments and transfer-service links and unlocks
-the *Mark as manuscript received* action. All state lives in
-`browser.storage.local` (`opened:v1:*`, `marked:v1:*`, `markedTerminal:v1:*`,
-`pendingMark:v1:*`, `lastCheck:v1`; `dismissed:v1:*` is read-only legacy).
-The API is **read-only** by IT policy — the extension never writes to V4.
+the *Mark as manuscript received* action. Persistent state lives in
+`browser.storage.local`: `opened:v1:*`, `marked:v1:*`, `markedTerminal:v1:*`
+(all legacy-mode only since v1.21.4 — in status mode the live status is the
+sole truth), plus `lastCheck:v1` diagnostics; `dismissed:v1:*` is read-only
+legacy, and removed mechanisms (`queue:v1`, `statusSeen:v1`,
+`pendingMark:v1:*`) are deleted by a startup cleanup. The API is
+**read-only** by IT policy — the extension never writes to V4.
 
 ### Releasing
 
