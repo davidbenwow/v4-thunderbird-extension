@@ -195,6 +195,18 @@ test('adapter: missing numeric status but recognizable response_status → lead 
   assert.strictEqual(q['c@x.com'].exists, false);
 });
 
+test('adapter: a present numeric status is authoritative — blocked/unknown numerics hide even with a status string', () => {
+  // DOMAIN_BLOCKED (4) means IT explicitly blocked the domain; an unknown
+  // future numeric (e.g. 5) is treated the same way. The trust-the-status
+  // fallback applies ONLY when the numeric field is absent.
+  const p = parseCheckResponse({
+    'a@x.com': { status: 4, response_status: 'response' },
+    'b@x.com': { status: 5, response_status: 'response' }
+  }, false);
+  assert.strictEqual(p['a@x.com'].exists, false);
+  assert.strictEqual(p['b@x.com'].exists, false);
+});
+
 test('shared defs: every canonical status has label/cls and matrix agrees with infoOnly', () => {
   // Top-level const bindings live in the context's lexical environment, not
   // on its global object — read them by evaluating inside the context (the
