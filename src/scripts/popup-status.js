@@ -206,8 +206,20 @@
     return ini.toUpperCase();
   }
 
-  function makeAvatar(address) {
-    return el('div', 'lead-avatar', initialsFor(address));
+  // Initials from a display name: "Mirela Rozmarin" → "MR", "Mirela" → "MI".
+  // First + last word so middle names/initials don't crowd in.
+  function initialsFromName(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    let ini;
+    if (words.length >= 2) ini = words[0][0] + words[words.length - 1][0];
+    else ini = words[0].slice(0, 2);
+    return ini.toUpperCase();
+  }
+
+  // Name-based initials when we trust the display name, else email-derived.
+  function makeAvatar(address, name) {
+    return el('div', 'lead-avatar', (name && initialsFromName(name)) || initialsFor(address));
   }
 
   // One tracker node: circle (done/current/rejected/future) + label below.
@@ -292,16 +304,28 @@
 
   function makeLeadCard(lead, signal) {
     const { address, leadStatus } = lead;
+    const name = lead.name || null;
     const manuscriptHas = !!(signal && signal.has);
     const card = el('div', 'lead-card');
 
     const header = el('div', 'card-header');
-    header.appendChild(makeAvatar(address));
+    header.appendChild(makeAvatar(address, name));
     const ident = el('div', 'card-ident');
-    ident.appendChild(el('div', 'card-ident-label', 'Lead'));
-    const em = el('div', 'card-ident-email', address);
-    em.title = address;
-    ident.appendChild(em);
+    if (name) {
+      // Name leads (bold headline); email demoted to a muted subtitle.
+      const nm = el('div', 'card-ident-name', name);
+      nm.title = name;
+      ident.appendChild(nm);
+      const em = el('div', 'card-ident-sub', address);
+      em.title = address;
+      ident.appendChild(em);
+    } else {
+      // No trustworthy name: keep the "LEAD" overline + email headline.
+      ident.appendChild(el('div', 'card-ident-label', 'Lead'));
+      const em = el('div', 'card-ident-email', address);
+      em.title = address;
+      ident.appendChild(em);
+    }
     header.appendChild(ident);
     header.appendChild(makeCopyBtn(address));
     card.appendChild(header);

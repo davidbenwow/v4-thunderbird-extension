@@ -554,6 +554,53 @@ function extractEmailsFromText(text) {
   return found;
 }
 
+// --- Display-name extraction ------------------------------------------------
+// Email headers carry "Display Name <addr>" (sender, recipients, cc). We pull
+// the name so the popup can headline the person, not the address. Names are
+// best-effort: absent for body-found addresses, and frequently junk, so
+// cleanName guards hard. Matches "Quoted, Name" <a@b> and bare Name <a@b>.
+//
+// The name-capture quantifiers are length-bounded ({0,160}) on purpose: an
+// unbounded lazy prefix over a global exec loop is O(n²) on adversarial header
+// strings (a hostile external sender could send a megabyte-long From name).
+// Bounding the per-name scan keeps matching linear in header length.
+const NAME_ADDR_RE =
+  /(?:"([^"]{0,160})"|([^,;<]{0,160}?))\s*<\s*([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,24})\s*>/gi;
+
+// Hard backstop: realistic author/recipient headers (even a big Cc list) are
+// well under this. Skip parsing pathologically long strings entirely → the
+// popup just falls back to the email headline for that message.
+const MAX_HEADER_LEN = 100000;
+
+function addNamesFromHeader(map, str) {
+  if (!str || str.length > MAX_HEADER_LEN) return;
+  NAME_ADDR_RE.lastIndex = 0;
+  let m;
+  while ((m = NAME_ADDR_RE.exec(str)) !== null) {
+    const email = m[3].toLowerCase();
+    const raw = (m[1] != null ? m[1] : (m[2] || '')).trim().replace(/^["']+|["']+$/g, '').trim();
+    if (raw && !map.has(email)) map.set(email, raw);
+  }
+}
+
+// Returns a trustworthy display name, or null. Rejects empty, the address
+// itself, bare emails, leftover MIME junk, and visual-spoofing control chars —
+// so a nameless or hostile sender falls back to the email headline instead of
+// showing a fake or deceptive name.
+function cleanName(name, email) {
+  if (!name || typeof name !== 'string') return null;
+  // Drop C0/C1 control chars and bidi overrides/isolates, which could reorder
+  // the visible name in the popup (e.g. RLO spoofing).
+  let n = name.replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g, '').trim();
+  if (!n) return null;
+  if (/[<>]/.test(n)) return null;                 // junk from malformed "A <B> <addr>"
+  if (/=\?[^?]+\?[BQ]\?/i.test(n)) return null;     // undecoded RFC2047 encoded-word
+  if (n.toLowerCase() === String(email).toLowerCase()) return null;
+  if (/^\S+@\S+\.\S+$/.test(n)) return null;        // a bare email, not a name
+  if (n.length > 120) n = n.slice(0, 120).trim();   // defensive display cap
+  return n || null;
+}
+
 // Defensive wrapper: if internal-domains.js failed to load, don't filter anything
 // (better to show the email than throw).
 function safeIsInternal(email) {
@@ -753,6 +800,13 @@ async function extractEmailsFromMessage(msgHeader) {
     for (const e of ccList)     addIfNew(e, 'cc');
     for (const e of bccList)    addIfNew(e, 'bcc');
 
+    // Display names from the same headers (highest-priority source wins).
+    const nameMap = new Map();
+    addNamesFromHeader(nameMap, msgHeader.author);
+    addNamesFromHeader(nameMap, (msgHeader.recipients || []).join(', '));
+    addNamesFromHeader(nameMap, (msgHeader.ccList || []).join(', '));
+    addNamesFromHeader(nameMap, (msgHeader.bccList || []).join(', '));
+
     try {
       const full = await getFullCached(msgHeader);
       const bodyText = collectBodyText(full);
@@ -764,7 +818,9 @@ async function extractEmailsFromMessage(msgHeader) {
 
     const filtered = [];
     for (const [address, source] of byAddress) {
-      if (!safeIsInternal(address)) filtered.push({ address, source });
+      if (!safeIsInternal(address)) {
+        filtered.push({ address, source, name: cleanName(nameMap.get(address), address) });
+      }
     }
 
     return {
@@ -934,9 +990,20 @@ async function getComposeEmails(tabId) {
     for (const e of cc)  addIfNew(e, 'cc');
     for (const e of bcc) addIfNew(e, 'bcc');
 
+    // Names from any "Name <addr>" string recipients (contact-object
+    // recipients resolve by id and carry no inline name → email fallback).
+    const nameMap = new Map();
+    for (const list of [details.to, details.cc, details.bcc]) {
+      for (const r of (list || [])) {
+        if (typeof r === 'string') addNamesFromHeader(nameMap, r);
+      }
+    }
+
     const filtered = [];
     for (const [address, source] of byAddress) {
-      if (!safeIsInternal(address)) filtered.push({ address, source });
+      if (!safeIsInternal(address)) {
+        filtered.push({ address, source, name: cleanName(nameMap.get(address), address) });
+      }
     }
 
     return { emails: filtered };

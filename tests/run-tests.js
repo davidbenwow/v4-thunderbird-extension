@@ -60,7 +60,8 @@ const {
   parseCheckResponse, normalizeLeadStatus, decideActionable, isInfoOnlyStatus,
   hasManuscriptExtension, extractTransferLinkHost, extractAnchorURLs,
   collectBodyText, stripHtmlTags, extractEmailsFromText,
-  extractEmailsFromVCard, isInternalEmail
+  extractEmailsFromVCard, isInternalEmail,
+  cleanName, addNamesFromHeader
 } = ctx;
 
 // --- Tiny runner --------------------------------------------------------------
@@ -279,6 +280,50 @@ test('emails: extraction lowercases and handles long TLDs', () => {
   eq(extractEmailsFromText('Reach Me@Example.COM today'), ['me@example.com']);
   eq(extractEmailsFromText('a@books.international'), ['a@books.international']);
   eq(extractEmailsFromText(''), []);
+});
+
+test('names: cleanName keeps a real name, rejects junk', () => {
+  assert.strictEqual(cleanName('Mirela Rozmarin', 'm@x.com'), 'Mirela Rozmarin');
+  assert.strictEqual(cleanName('  Anna  ', 'a@x.com'), 'Anna');
+  assert.strictEqual(cleanName('', 'a@x.com'), null);            // empty
+  assert.strictEqual(cleanName(null, 'a@x.com'), null);          // missing
+  assert.strictEqual(cleanName('a@x.com', 'a@x.com'), null);     // name == address
+  assert.strictEqual(cleanName('OTHER@y.com', 'a@x.com'), null); // bare email, not a name
+});
+
+test('names: cleanName rejects malformed and spoofing input', () => {
+  const NUL = String.fromCharCode(0);        // C0 control
+  const RLO = String.fromCharCode(0x202E);   // bidi right-to-left override
+  assert.strictEqual(cleanName('Bar>', 'a@x.com'), null);               // angle-bracket junk
+  assert.strictEqual(cleanName('A <b', 'a@x.com'), null);               // angle-bracket junk
+  assert.strictEqual(cleanName('=?UTF-8?Q?Mirela?=', 'a@x.com'), null); // undecoded MIME word
+  assert.strictEqual(cleanName('Anna' + NUL + 'Bell', 'a@x.com'), 'AnnaBell'); // control stripped
+  assert.strictEqual(cleanName(RLO + 'evil', 'a@x.com'), 'evil');       // bidi override stripped
+  assert.strictEqual(cleanName(NUL + RLO, 'a@x.com'), null);            // only controls -> null
+});
+
+test('names: addNamesFromHeader stays linear on a long hostile header', () => {
+  const m = new Map();
+  const huge = 'A'.repeat(200000) + ' <nope>';  // no valid <email> at the end
+  const t0 = process.hrtime.bigint();
+  addNamesFromHeader(m, huge);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  assert.strictEqual(m.size, 0);
+  assert.ok(ms < 500, `addNamesFromHeader took ${ms.toFixed(0)}ms (expected < 500ms)`);
+});
+
+test('names: addNamesFromHeader parses quoted and bare display names', () => {
+  const m = new Map();
+  addNamesFromHeader(m, '"Rozmarin, Mirela" <mirela@books.com>, Bob Jones <bob@x.com>');
+  assert.strictEqual(m.get('mirela@books.com'), 'Rozmarin, Mirela');
+  assert.strictEqual(m.get('bob@x.com'), 'Bob Jones');
+});
+
+test('names: addNamesFromHeader lowercases the email key and keeps first name', () => {
+  const m = new Map();
+  addNamesFromHeader(m, 'First Name <Person@Example.COM>');
+  addNamesFromHeader(m, 'Second Name <person@example.com>');  // dup → first wins
+  assert.strictEqual(m.get('person@example.com'), 'First Name');
 });
 
 test('emails: vCard extraction with folding and group prefixes', () => {
