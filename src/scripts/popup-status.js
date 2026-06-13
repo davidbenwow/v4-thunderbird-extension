@@ -197,9 +197,12 @@
 
   // Initials from the email local part: "mirela.rozmarin" → "MR".
   function initialsFor(address) {
-    const local = String(address || '').split('@')[0] || '?';
-    const parts = local.split(/[._\-]+/).filter(Boolean);
-    const ini = parts.length >= 2 ? parts[0][0] + parts[1][0] : local.slice(0, 2);
+    const local = String(address || '').split('@')[0] || '';
+    const parts = local.split(/[._\-]+/).filter(Boolean);  // drop separator runs
+    let ini;
+    if (parts.length >= 2) ini = parts[0][0] + parts[1][0];
+    else if (parts.length === 1) ini = parts[0].slice(0, 2);
+    else ini = '?';
     return ini.toUpperCase();
   }
 
