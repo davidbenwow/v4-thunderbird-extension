@@ -187,13 +187,140 @@
     return copyBtn;
   }
 
-  // leadStatus: normalized V4 status string or null (legacy mode).
-  // layout: 'hero'    — single-lead view: identity lives in the section
-  //                     header (so no subtitle/copy here), labeled columns
-  //                     (Current status / Next action), badge under button
-  //         'compact' — multi-lead rows: subtitle + badge in the text column
-  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal, layout = 'compact') {
-    const hero = layout === 'hero';
+  // --- Single-lead progress-tracker card (the hero view) ------------------
+  // Avatar + identity header, a 3-step tracker (Contacted → Responded →
+  // Manuscript) showing where this lead sits in the acquisition pipeline, an
+  // optional manuscript file pill, and one full-width action. Status mode only.
+
+  function makeCheckGlyph() { return makeStrokeGlyph('node-glyph', ['M5 13l4 4L19 7']); }
+  function makeCrossGlyph() { return makeStrokeGlyph('node-glyph', ['M6 6l12 12', 'M18 6L6 18']); }
+
+  // Initials from the email local part: "mirela.rozmarin" → "MR".
+  function initialsFor(address) {
+    const local = String(address || '').split('@')[0] || '?';
+    const parts = local.split(/[._\-]+/).filter(Boolean);
+    const ini = parts.length >= 2 ? parts[0][0] + parts[1][0] : local.slice(0, 2);
+    return ini.toUpperCase();
+  }
+
+  function makeAvatar(address) {
+    return el('div', 'lead-avatar', initialsFor(address));
+  }
+
+  // One tracker node: circle (done/current/rejected/future) + label below.
+  // Label is emphasized (colored + bold) only for the lead's active position
+  // — the current/next step, the settled status, or a rejection — so passed
+  // and future steps stay quiet. highlight adds the soft pill behind the label.
+  function makeNode(label, state, color, highlight) {
+    const node = el('div', `track-node n-${state} c-${color}`);
+    const circle = el('span', 'node-circle');
+    if (state === 'done') circle.appendChild(makeCheckGlyph());
+    else if (state === 'rejected') circle.appendChild(makeCrossGlyph());
+    node.appendChild(circle);
+    const emphasized = state === 'current' || state === 'rejected' || highlight;
+    let cls = 'node-label';
+    if (emphasized) cls += ' node-label-em';
+    if (highlight) cls += ' node-label-hl';
+    node.appendChild(el('span', cls, label));
+    return node;
+  }
+
+  function makeConnector(color) { return el('span', `track-conn conn-${color}`); }
+
+  // status → tracker. Mirrors the pipeline: Contacted (always done for an
+  // existing lead) → Responded → Manuscript. Each node = [label, state, color,
+  // highlight]; conn1/conn2 are the two connector colors.
+  function makeTracker(leadStatus, manuscriptHas) {
+    const C = ['Contacted', 'done', 'green', false];
+    let R, M, c1, c2;
+    switch (leadStatus) {
+      case 'no_response':
+        if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; c1 = 'gray';  c2 = 'gray'; }
+        else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'green'; c2 = 'gray'; }
+        break;
+      case 'response':
+        R = ['Responded', 'done', 'green', true];
+        M = manuscriptHas ? ['Manuscript', 'current', 'blue', false] : ['Manuscript', 'future', 'gray', false];
+        c1 = 'green'; c2 = 'gray';
+        break;
+      case 'manuscript_received':
+        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'green'; c2 = 'blue';
+        break;
+      case 'rejected':
+        R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'green'; c2 = 'gray';
+        break;
+      default: // locked, invalid_email — no known sub-position
+        R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'gray'; c2 = 'gray';
+    }
+    const track = el('div', 'tracker');
+    track.appendChild(makeNode.apply(null, C));
+    track.appendChild(makeConnector(c1));
+    track.appendChild(makeNode.apply(null, R));
+    track.appendChild(makeConnector(c2));
+    track.appendChild(makeNode.apply(null, M));
+    return track;
+  }
+
+  // Full-width action. Mark actions are FILLED (green/blue) and primary;
+  // "Open in V4" is a muted outline. All carry ↗ — every button navigates to
+  // V4, none commits in place.
+  function makeCardButton(leadStatus, manuscriptHas, address) {
+    const markBtn = el('button', 'mark-btn btn-block');
+    markBtn.dataset.email = address;
+    markBtn.dataset.statusMode = '1';
+    if (isInfoOnlyStatus(leadStatus) || (leadStatus === 'response' && !manuscriptHas)) {
+      setOpenOnlyButtonState(markBtn);
+    } else if (manuscriptHas) {
+      markBtn.dataset.terminal = '1';
+      setManuscriptButtonState(markBtn);
+      markBtn.classList.add('fill-blue');
+    } else { // no_response, no manuscript
+      setResponseButtonState(markBtn);
+      markBtn.classList.add('fill-green');
+    }
+    return markBtn;
+  }
+
+  // Captions for statuses that have no tracker position.
+  const STATUS_CAPTION = {
+    locked: 'Locked — another user is handling this lead.',
+    invalid_email: 'Invalid email address.'
+  };
+
+  function makeLeadCard(lead, signal) {
+    const { address, leadStatus } = lead;
+    const manuscriptHas = !!(signal && signal.has);
+    const card = el('div', 'lead-card');
+
+    const header = el('div', 'card-header');
+    header.appendChild(makeAvatar(address));
+    const ident = el('div', 'card-ident');
+    ident.appendChild(el('div', 'card-ident-label', 'Lead'));
+    const em = el('div', 'card-ident-email', address);
+    em.title = address;
+    ident.appendChild(em);
+    header.appendChild(ident);
+    header.appendChild(makeCopyBtn(address));
+    card.appendChild(header);
+
+    const body = el('div', 'card-body');
+    body.appendChild(makeTracker(leadStatus, manuscriptHas));
+
+    const badge = makeManuscriptBadge(signal);
+    if (badge) { badge.classList.add('badge-block'); body.appendChild(badge); }
+
+    const caption = STATUS_CAPTION[leadStatus];
+    if (caption) body.appendChild(el('div', 'card-caption', caption));
+
+    body.appendChild(makeCardButton(leadStatus, manuscriptHas, address));
+    card.appendChild(body);
+    return card;
+  }
+
+  // leadStatus: normalized V4 status string or null (legacy mode). Renders the
+  // COMPACT row used in the multi-lead list and the legacy fallback row; the
+  // single-lead hero uses makeLeadCard.
+  function makeLeadRow({ address, source, leadStatus }, statusCode, isOpened, currentManuscriptSignal) {
     const manuscriptHas = !!(currentManuscriptSignal && currentManuscriptSignal.has);
 
     // ---- STATUS MODE: the live V4 status is the headline AND the sole source
@@ -201,30 +328,24 @@
     // clicking the button only opens V4; nothing is hidden optimistically.
     // Email is demoted to a quiet subtitle.
     if (leadStatus !== null) {
-      // No colored stripe: the colored status text + dot already carry the
-      // state; one signal, not three.
       const row = el('div', 'lead-row');
-
       const main = el('div', 'lead-row-main');
       const text = el('div', 'lead-text');
-      if (hero) {
-        text.appendChild(el('div', 'status-overline', 'Current status'));
-      }
       text.appendChild(makeStatusTitle(leadStatus));
 
-      if (!hero) {
-        const sub = el('div', 'lead-subtitle');
-        sub.appendChild(el('span', 'sub-email', address));
-        // 'sender' is the default/obvious case — annotating it is just noise.
-        // Other sources (recipient, Cc, found in thread) ARE worth flagging.
-        if (source && source !== 'sender') {
-          sub.appendChild(el('span', 'sub-sep', '·'));
-          sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
-        }
-        sub.title = address;
-        text.appendChild(sub);
+      const sub = el('div', 'lead-subtitle');
+      sub.appendChild(el('span', 'sub-email', address));
+      // 'sender' is the default/obvious case — annotating it is just noise.
+      // Other sources (recipient, Cc, found in thread) ARE worth flagging.
+      if (source && source !== 'sender') {
+        sub.appendChild(el('span', 'sub-sep', '·'));
+        sub.appendChild(el('span', 'sub-source', SOURCE_LABELS[source] || source));
       }
+      sub.title = address;
+      text.appendChild(sub);
+
       const badge = makeManuscriptBadge(currentManuscriptSignal);
+      if (badge) text.appendChild(badge);
       main.appendChild(text);
       row.appendChild(main);
 
@@ -232,39 +353,18 @@
       const markBtn = el('button', 'mark-btn');
       markBtn.dataset.email = address;
       markBtn.dataset.statusMode = '1';
-
-      const terminalStatus = isInfoOnlyStatus(leadStatus);
-      let isMarkAction = false;
-      if (terminalStatus) {
+      if (isInfoOnlyStatus(leadStatus)) {
         setOpenOnlyButtonState(markBtn);
       } else if (manuscriptHas) {
         markBtn.dataset.terminal = '1';
-        setManuscriptButtonState(markBtn);   // "Mark as manuscript received"
-        isMarkAction = true;
+        setManuscriptButtonState(markBtn);
       } else if (leadStatus === 'no_response') {
-        setResponseButtonState(markBtn);      // "Mark as response"
-        isMarkAction = true;
+        setResponseButtonState(markBtn);
       } else {                                 // response, no manuscript
         setOpenOnlyButtonState(markBtn);
       }
-
-      if (hero) {
-        // Single-lead view: labeled two-column grammar — CURRENT STATUS on
-        // the left, NEXT ACTION over the button on the right (only when the
-        // button IS an action — labeling 'Open in V4' as an action would
-        // lie), and the manuscript pill below the button it justifies.
-        row.classList.add('labeled');
-        if (isMarkAction) {
-          actions.appendChild(el('div', 'status-overline', 'Next action'));
-        }
-        actions.appendChild(markBtn);
-        if (badge) actions.appendChild(badge);
-      } else {
-        // Compact multi-lead rows: badge stays in the text column.
-        if (badge) text.appendChild(badge);
-        actions.appendChild(markBtn);
-      }
-      if (!hero) actions.appendChild(makeCopyBtn(address));
+      actions.appendChild(markBtn);
+      actions.appendChild(makeCopyBtn(address));
       row.appendChild(actions);
       return row;
     }
@@ -314,24 +414,6 @@
   function makeSectionHeader(title) {
     const h = el('div', 'section-header');
     h.appendChild(el('span', 'section-title', title));
-    return h;
-  }
-
-  // Identity header for the single-lead view: LEAD <email> [source] [copy].
-  // The email is WHO this popup is about — it belongs in the header line, not
-  // buried in the row competing with the status. The copy button sits next to
-  // the email it copies.
-  function makeLeadHeader({ address, source }) {
-    const h = el('div', 'section-header');
-    h.appendChild(el('span', 'section-label', 'Lead'));
-    const emailSpan = el('span', 'section-lead-email', address);
-    emailSpan.title = address;
-    h.appendChild(emailSpan);
-    if (source && source !== 'sender') {
-      h.appendChild(el('span', 'section-lead-source', SOURCE_LABELS[source] || source));
-    }
-    h.appendChild(el('span', 'section-spacer'));
-    h.appendChild(makeCopyBtn(address));
     return h;
   }
 
@@ -518,14 +600,11 @@
 
     const single = leads.length === 1 ? leads[0] : null;
     if (single && single.leadStatus !== null) {
-      // One status-mode lead (the overwhelmingly common case): identity in
-      // the header, labeled status + action in the row.
-      ui.leadsSection.appendChild(makeLeadHeader(single));
-      const ev = evaluation[single.address.toLowerCase()] || {};
-      ui.leadsSection.appendChild(makeLeadRow(
-        single, single.statusCode, !!ev.opened, currentManuscriptSignal, 'hero'
-      ));
+      // One status-mode lead (the common case): the progress-tracker card.
+      ui.leadsSection.classList.add('has-card');
+      ui.leadsSection.appendChild(makeLeadCard(single, currentManuscriptSignal));
     } else {
+      ui.leadsSection.classList.remove('has-card');
       const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
       ui.leadsSection.appendChild(makeSectionHeader(title));
       for (const l of leads) {

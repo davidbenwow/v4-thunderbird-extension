@@ -367,6 +367,172 @@ header h1 {
   user-select: none;
 }
 
+/* ========== Single-lead progress-tracker card ======================= */
+/* The card floats on the popup's light-gray body; only the single-lead
+   results view gets this treatment (.has-card makes the section transparent). */
+.section.has-card { background: var(--ink-50); padding: 6px 0; }
+
+.lead-card {
+  margin: 8px 14px 14px;
+  background: var(--surface);
+  border-radius: 14px;
+  border: 0.5px solid var(--ink-200);
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.08), 0 6px 16px rgba(15, 23, 41, 0.06);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.lead-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ink-900);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-ident { flex: 1; min-width: 0; }
+
+.card-ident-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.card-ident-email {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-900);
+  letter-spacing: -0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-header .icon-btn { width: 34px; height: 34px; flex-shrink: 0; }
+
+.card-body { padding: 18px 16px 16px; }
+
+/* --- 3-step tracker --- */
+.tracker { display: flex; align-items: flex-start; padding: 2px 2px 0; }
+
+.track-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 60px;
+}
+
+.node-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: transparent;
+  border: 2px solid var(--ink-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.node-glyph { width: 16px; height: 16px; color: #fff; }
+
+.track-node.n-done.c-green  .node-circle { background: #16a34a; border-color: #16a34a; }
+.track-node.n-done.c-blue   .node-circle { background: #0ea5e9; border-color: #0ea5e9; }
+.track-node.n-rejected      .node-circle { background: #dc2626; border-color: #dc2626; }
+.track-node.n-current.c-green .node-circle { border: 2px dashed #16a34a; }
+.track-node.n-current.c-blue  .node-circle { border: 2px dashed #0ea5e9; }
+
+.node-label {
+  margin-top: 8px;
+  max-width: 84px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--ink-400);
+}
+
+.track-node.c-green .node-label-em { color: #15803d; font-weight: 700; }
+.track-node.c-blue  .node-label-em { color: #0369a1; font-weight: 700; }
+.track-node.c-red   .node-label-em { color: #b91c1c; font-weight: 700; }
+
+.node-label-hl { padding: 2px 8px; border-radius: 999px; }
+.track-node.c-green .node-label-hl { background: var(--resp-bg); }
+.track-node.c-blue  .node-label-hl { background: var(--manu-bg); }
+.track-node.c-red   .node-label-hl { background: var(--rej-bg); }
+
+.track-conn {
+  flex: 1 1 auto;
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 14px;
+  background: var(--ink-200);
+}
+.conn-green { background: #16a34a; }
+.conn-blue  { background: #0ea5e9; }
+.conn-gray  { background: var(--ink-200); }
+
+/* --- card file pill (full-width) + caption + block button --- */
+.ms-badge.badge-block {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 16px;
+  padding: 10px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.ms-badge.badge-block .ms-glyph { width: 14px; height: 14px; }
+.ms-badge.badge-block .ms-name { flex: 1; }
+
+.card-caption {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--ink-500);
+  text-align: center;
+}
+
+.mark-btn.btn-block {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-top: 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.mark-btn.btn-block.fill-green {
+  background: #34a853; border-color: #34a853; color: #fff;
+}
+.mark-btn.btn-block.fill-green:hover {
+  background: #2e9549; border-color: #2e9549; color: #fff;
+}
+.mark-btn.btn-block.fill-blue {
+  background: #4a90e2; border-color: #4a90e2; color: #fff;
+}
+.mark-btn.btn-block.fill-blue:hover {
+  background: #3a7fce; border-color: #3a7fce; color: #fff;
+}
+
 /* ========== V4 lead-status pill (status mode) ======================== */
 /* Soft pill: tinted background + colored text + dot. The tint family
    follows V4's own button language (green = response, blue = manuscript,
