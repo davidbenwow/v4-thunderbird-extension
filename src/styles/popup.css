@@ -368,18 +368,10 @@ header h1 {
 }
 
 /* ========== Single-lead progress-tracker card ======================= */
-/* The card floats on the popup's light-gray body; only the single-lead
-   results view gets this treatment (.has-card makes the section transparent). */
-.section.has-card { background: var(--ink-50); padding: 6px 0; }
-
-.lead-card {
-  margin: 8px 14px 14px;
-  background: var(--surface);
-  border-radius: 14px;
-  border: 0.5px solid var(--ink-200);
-  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.08), 0 6px 16px rgba(15, 23, 41, 0.06);
-  overflow: hidden;
-}
+/* The popup itself is the card (Thunderbird draws the floating panel), so
+   the lead view fills it edge to edge — no nested frame, no gray gutter.
+   The header's hairline is the only divider. */
+.lead-card { background: var(--surface); }
 
 .card-header {
   display: flex;

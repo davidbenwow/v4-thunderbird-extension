@@ -604,10 +604,8 @@
     const single = leads.length === 1 ? leads[0] : null;
     if (single && single.leadStatus !== null) {
       // One status-mode lead (the common case): the progress-tracker card.
-      ui.leadsSection.classList.add('has-card');
       ui.leadsSection.appendChild(makeLeadCard(single, currentManuscriptSignal));
     } else {
-      ui.leadsSection.classList.remove('has-card');
       const title = leads.length === 1 ? '1 lead found' : `${leads.length} leads found`;
       ui.leadsSection.appendChild(makeSectionHeader(title));
       for (const l of leads) {
