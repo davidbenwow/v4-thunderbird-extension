@@ -493,7 +493,7 @@ header h1 {
 /* Highlighted (current/settled) status: a FILLED pill in the same colour as
    the node's tick, white text — so the live status reads at a glance and
    matches its circle above. No dot. */
-.node-label-hl { padding: 3px 10px; border-radius: 999px; }
+.node-label-hl { padding: 4px 10px; border-radius: 10px; }
 .track-node.c-green .node-label-hl { background: #16a34a; color: #fff; }
 .track-node.c-blue  .node-label-hl { background: #0ea5e9; color: #fff; }
 .track-node.c-red   .node-label-hl { background: #dc2626; color: #fff; }
@@ -563,8 +563,8 @@ header h1 {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 11px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  border-radius: 10px;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.1px;
