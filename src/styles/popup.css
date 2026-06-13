@@ -67,7 +67,7 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-body { min-width: 440px; }
+body { min-width: 440px; max-width: 500px; }
 
 .v4-popup { padding: 0; }
 
@@ -382,8 +382,8 @@ header h1 {
 }
 
 .lead-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--ink-900);
   color: #fff;
@@ -439,7 +439,7 @@ header h1 {
 
 .card-header .icon-btn { width: 34px; height: 34px; flex-shrink: 0; }
 
-.card-body { padding: 18px 16px 16px; }
+.card-body { padding: 14px 16px 16px; }
 
 /* --- 3-step tracker --- */
 .tracker { display: flex; align-items: flex-start; padding: 2px 2px 0; }
@@ -532,7 +532,7 @@ header h1 {
   width: 100%;
   justify-content: center;
   box-sizing: border-box;
-  margin-top: 16px;
+  margin-top: 12px;
   padding: 12px 14px;
   font-size: 14px;
   border-radius: 10px;
