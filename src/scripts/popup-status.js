@@ -127,12 +127,11 @@
   // the single source of truth shared with the background script.
   function makeStatusTitle(statusKey) {
     const meta = LEAD_STATUS_DEFS[statusKey] || LEAD_STATUS_DEFS.no_response;
-    // Soft pill (tinted bg + colored text), NOT V4's filled style: filled
-    // pills read as buttons, and the status is state, not action. The tint
-    // still echoes the V4 button that set this status (green/blue/red).
+    // Filled pill in the V4 status colour (green/blue/red, grey for no
+    // response) with white text — same chip style as the tracker's tick and
+    // highlighted label, so every status reads consistently. No dot.
     const wrap = el('div', 'status-pill-wrap');
     const pill = el('span', `status-pill ${meta.cls}`);
-    pill.appendChild(el('span', 'dot'));
     pill.appendChild(document.createTextNode(meta.label));
     wrap.appendChild(pill);
     return wrap;
