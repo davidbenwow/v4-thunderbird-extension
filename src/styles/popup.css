@@ -467,9 +467,11 @@ header h1 {
 
 .node-glyph { width: 16px; height: 16px; color: #fff; }
 
+.track-node.n-done.c-lime   .node-circle { background: #65a30d; border-color: #65a30d; }
 .track-node.n-done.c-green  .node-circle { background: #16a34a; border-color: #16a34a; }
 .track-node.n-done.c-blue   .node-circle { background: #0ea5e9; border-color: #0ea5e9; }
 .track-node.n-rejected      .node-circle { background: #dc2626; border-color: #dc2626; }
+.track-node.n-current.c-lime  .node-circle { border: 2px dashed #65a30d; }
 .track-node.n-current.c-green .node-circle { border: 2px dashed #16a34a; }
 .track-node.n-current.c-blue  .node-circle { border: 2px dashed #0ea5e9; }
 
@@ -483,6 +485,7 @@ header h1 {
   color: var(--ink-400);
 }
 
+.track-node.c-lime  .node-label-em { color: #4d7c0f; font-weight: 700; }
 .track-node.c-green .node-label-em { color: #15803d; font-weight: 700; }
 .track-node.c-blue  .node-label-em { color: #0369a1; font-weight: 700; }
 .track-node.c-red   .node-label-em { color: #b91c1c; font-weight: 700; }
@@ -499,6 +502,7 @@ header h1 {
   margin-top: 14px;
   background: var(--ink-200);
 }
+.conn-lime  { background: #65a30d; }
 .conn-green { background: #16a34a; }
 .conn-blue  { background: #0ea5e9; }
 .conn-gray  { background: var(--ink-200); }

@@ -244,25 +244,26 @@
 
   // status → tracker. Mirrors the pipeline: Contacted (always done for an
   // existing lead) → Responded → Manuscript. Each node = [label, state, color,
-  // highlight]; conn1/conn2 are the two connector colors.
+  // highlight]; conn1/conn2 are the two connector colors. Contacted is lime
+  // (yellow-green) so the bar sweeps warm → cool: lime → green → sky.
   function makeTracker(leadStatus, manuscriptHas) {
-    const C = ['Contacted', 'done', 'green', false];
+    const C = ['Contacted', 'done', 'lime', false];
     let R, M, c1, c2;
     switch (leadStatus) {
       case 'no_response':
         if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; c1 = 'gray';  c2 = 'gray'; }
-        else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'green'; c2 = 'gray'; }
+        else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray'; }
         break;
       case 'response':
         R = ['Responded', 'done', 'green', true];
         M = manuscriptHas ? ['Manuscript', 'current', 'blue', false] : ['Manuscript', 'future', 'gray', false];
-        c1 = 'green'; c2 = 'gray';
+        c1 = 'lime'; c2 = 'gray';
         break;
       case 'manuscript_received':
-        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'green'; c2 = 'blue';
+        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'lime'; c2 = 'blue';
         break;
       case 'rejected':
-        R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'green'; c2 = 'gray';
+        R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray';
         break;
       default: // locked, invalid_email — no known sub-position
         R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'gray'; c2 = 'gray';
