@@ -171,7 +171,10 @@
     const badge = el('span', 'ms-badge');
     badge.appendChild(makeDocGlyph());
     const detail = String(signal.detail || 'document');
-    badge.appendChild(el('span', 'ms-name', detail.length > 34 ? detail.slice(0, 31) + '…' : detail));
+    // Show the full name and let CSS ellipsis trim to whatever the pill's
+    // actual width allows (full hero card width, narrower in compact rows) —
+    // a fixed char cap wasted the wide pill. Full name is in the title below.
+    badge.appendChild(el('span', 'ms-name', detail));
     badge.title = signal.type === 'attachment'
       ? 'Possible manuscript attached: ' + detail
       : 'Possible manuscript transfer link: ' + detail;

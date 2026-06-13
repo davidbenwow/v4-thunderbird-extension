@@ -286,6 +286,7 @@ header h1 {
 }
 
 .ms-badge .ms-name {
+  min-width: 0;        /* let the flex child shrink so ellipsis fires by width */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
