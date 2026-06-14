@@ -242,44 +242,54 @@
     return node;
   }
 
-  function makeConnector(color) { return el('span', `track-conn conn-${color}`); }
+  // Tracker palette (mirrors the node-circle hexes in popup.css). 'gray' is the
+  // future/neutral rail colour (--ink-200).
+  const TRACK_HEX = { lime: '#65a30d', green: '#16a34a', blue: '#0ea5e9', red: '#dc2626', gray: '#dfe4ec' };
+
+  // A connector is a true gradient between the colours of the two nodes it
+  // joins — so the rail flows continuously (lime → green → sky) and fades to
+  // grey wherever a node is still 'future'.
+  function makeConnector(fromColor, toColor) {
+    const c = el('span', 'track-conn');
+    c.style.background =
+      `linear-gradient(90deg, ${TRACK_HEX[fromColor] || TRACK_HEX.gray}, ${TRACK_HEX[toColor] || TRACK_HEX.gray})`;
+    return c;
+  }
 
   // status → tracker. Mirrors the pipeline: Contacted (always done for an
   // existing lead) → Responded → Manuscript. Each node = [label, state, color,
-  // highlight]; conn1/conn2 are the two connector colors. Contacted is lime
-  // (yellow-green) so the bar sweeps warm → cool: lime → green → sky.
-  // Connector rule (keep the rail a consistent gradient): a connector carries
-  // the colour of the completed milestone it LEAVES; the rail stays coloured up
-  // to the current step, grey only beyond it. Contacted is always done, so
-  // conn1 is always lime. (Skip state is the one exception: when Responded is
-  // bypassed for a manuscript, conn2 reconnects in blue to the active step.)
+  // highlight]. The connectors are NOT chosen per-state: each blends between
+  // the colours of the two nodes it joins (see makeConnector), so the node
+  // colours alone drive the whole rail and there is no separate connector rule
+  // that can drift out of consistency. Contacted is lime so the bar sweeps
+  // warm → cool: lime → green → sky.
   function makeTracker(leadStatus, manuscriptHas) {
     const C = ['Contacted', 'done', 'lime', false];
-    let R, M, c1, c2;
+    let R, M;
     switch (leadStatus) {
       case 'no_response':
-        if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; c1 = 'lime';  c2 = 'blue'; }
-        else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray'; }
+        if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; }
+        else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; }
         break;
       case 'response':
         R = ['Responded', 'done', 'green', true];
         M = manuscriptHas ? ['Manuscript', 'current', 'blue', false] : ['Manuscript', 'future', 'gray', false];
-        c1 = 'lime'; c2 = manuscriptHas ? 'green' : 'gray';
         break;
       case 'manuscript_received':
-        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'lime'; c2 = 'green';
+        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true];
         break;
       case 'rejected':
-        R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray';
+        R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false];
         break;
       default: // locked, invalid_email — no known sub-position
-        R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray';
+        R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false];
     }
+    // Connector colour = gradient between adjacent node colours (index [2]).
     const track = el('div', 'tracker');
     track.appendChild(makeNode.apply(null, C));
-    track.appendChild(makeConnector(c1));
+    track.appendChild(makeConnector(C[2], R[2]));
     track.appendChild(makeNode.apply(null, R));
-    track.appendChild(makeConnector(c2));
+    track.appendChild(makeConnector(R[2], M[2]));
     track.appendChild(makeNode.apply(null, M));
     return track;
   }

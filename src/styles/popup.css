@@ -514,12 +514,10 @@ header h1 {
   height: 3px;
   border-radius: 2px;
   margin-top: 14px;
+  /* colour is an inline linear-gradient set by makeConnector (blends between
+     the two nodes it joins); --ink-200 is the fallback before that applies. */
   background: var(--ink-200);
 }
-.conn-lime  { background: #65a30d; }
-.conn-green { background: #16a34a; }
-.conn-blue  { background: #0ea5e9; }
-.conn-gray  { background: var(--ink-200); }
 
 /* --- card file pill (full-width) + caption + block button --- */
 .ms-badge.badge-block {
