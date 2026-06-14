@@ -35,9 +35,21 @@ echo "Updated src/manifest.json to version $NEW_VERSION"
 # Build the unsigned XPI
 ./scripts/build.sh
 
-# Update docs/updates.json — prepend a new entry so newest is first
-python3 <<PY
-import json
+XPI="build/v4_contacts-$NEW_VERSION.xpi"
+XPI_HASH="$(shasum -a 256 "$XPI" | awk '{print $1}')"
+
+# Publish copies: the versioned XPI into both release trees (the GitHub-served
+# docs/releases keeps EVERY version so historical update_links never 404), plus
+# a rolling latest.xpi that the download page links to with a stable URL.
+cp "$XPI" "releases/v4_contacts-$NEW_VERSION.xpi"
+cp "$XPI" "docs/releases/v4_contacts-$NEW_VERSION.xpi"
+cp "$XPI" "docs/releases/v4_contacts-latest.xpi"
+echo "Copied XPI to releases/, docs/releases/, and docs/releases/v4_contacts-latest.xpi"
+
+# Update docs/updates.json — prepend a new entry so newest is first. update_hash
+# lets Thunderbird verify the download against the manifest before installing.
+XPI_HASH="$XPI_HASH" python3 <<PY
+import json, os
 with open('docs/updates.json', 'r') as f:
     updates = json.load(f)
 
@@ -45,6 +57,7 @@ addon_id = 'v4-contacts@snap-collective.com'
 new_entry = {
     'version': '$NEW_VERSION',
     'update_link': f'https://davidbenwow.github.io/v4-thunderbird-extension/releases/v4_contacts-$NEW_VERSION.xpi',
+    'update_hash': 'sha256:' + os.environ['XPI_HASH'],
     'applications': {
         'gecko': {
             'strict_min_version': '115.0'
@@ -64,11 +77,8 @@ with open('docs/updates.json', 'w') as f:
     f.write('\n')
 PY
 
-echo "Updated docs/updates.json"
+echo "Updated docs/updates.json (with sha256 update_hash)"
 echo ""
 echo "Next steps:"
-echo "  1. Submit build/v4_contacts-$NEW_VERSION.xpi to addons.thunderbird.net (Unlisted)"
-echo "  2. Copy the signed XPI they return to:"
-echo "       releases/v4_contacts-$NEW_VERSION.xpi"
-echo "       docs/releases/v4_contacts-$NEW_VERSION.xpi"
-echo "  3. git add -A && git commit -m 'Release v$NEW_VERSION' && git push"
+echo "  1. git add -A && git commit -m 'Release v$NEW_VERSION' && git push"
+echo "  2. Verify https://davidbenwow.github.io/v4-thunderbird-extension/ serves v$NEW_VERSION"

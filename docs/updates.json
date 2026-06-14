@@ -9,7 +9,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:315c3ea298aa4e78eb5256aad9f35905f655b6572ca17f1195bca1941ed72013"
         },
         {
           "version": "1.30.8",
@@ -18,7 +19,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:60d566e19a55368543dac198e8a064e5528ef449651829ef20a9dc06728f295a"
         },
         {
           "version": "1.30.7",
@@ -27,7 +29,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:48ebe8e34269ea5f70ca231a9959a1dfeaad87a2cda0208e196254b6875a8b64"
         },
         {
           "version": "1.30.6",
@@ -36,7 +39,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:d3833ba563e1494134b9a3c9737f606817cc13a38b0abd30fbbf4880a1f5f7fc"
         },
         {
           "version": "1.30.5",
@@ -45,7 +49,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:6d56eb6c8ffce3f6c59c5de4635e2c4b2072303d71492fd05e59ba9f76443afa"
         },
         {
           "version": "1.30.4",
@@ -54,7 +59,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:cc5b404d059f1ee361a1f9cb16d4f8c581d2f75e8e2d2dcd0b60998529048205"
         },
         {
           "version": "1.30.3",
@@ -63,7 +69,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:ce7d48412a52f9c7f7af37bf5911129f23c0309ba3a537e6fcb8a2e080062ce8"
         },
         {
           "version": "1.30.2",
@@ -72,7 +79,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:eb1e56650ab84af8fa0131b20a7c1cfc8d4745a11667d0e53c44093cd5ba34de"
         },
         {
           "version": "1.30.1",
@@ -81,7 +89,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:4a3a53ffe20be387b6e972e30a0ada67aea43db93af6fbdcfe99753a162f811a"
         },
         {
           "version": "1.30.0",
@@ -90,7 +99,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:0896c44256cb72e9f84c86754a409b6b3d7ad501589e8178afd957e1b65912d8"
         },
         {
           "version": "1.29.2",
@@ -99,7 +109,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:db0c2777df30a392eada83bbbc66d91aad3f07c45e1ccf7f9c052e4c111b4936"
         },
         {
           "version": "1.29.1",
@@ -108,7 +119,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:ff591583863e4d4d2aa2f74858ef2259881853dd6fdbfe29610c5395a2c03d92"
         },
         {
           "version": "1.29.0",
@@ -117,7 +129,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:e0ca0ec3e82b57a66002d819aac03f024703279b350a018cfca135bb16293239"
         },
         {
           "version": "1.28.0",
@@ -126,7 +139,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:950a0235e532da2212431406a6846704f6abd374e664f6eaf6c74fc4903403ca"
         },
         {
           "version": "1.27.0",
@@ -135,7 +149,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:b50ce40a1f94598886eba1734a3e077ffe62a1d30a282cc3865284a21be298e0"
         },
         {
           "version": "1.26.0",
@@ -144,7 +159,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:6c7e171397fb938285e907e23b274f776e705f0cae7e80eabd53ff0d9cead757"
         },
         {
           "version": "1.25.1",
@@ -153,7 +169,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:63796b175a9192ca81ae224353103a6e9717b5afa92d47d67f2d2091b5507ec2"
         },
         {
           "version": "1.25.0",
@@ -162,7 +179,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:67728aac90e4bfb2ad42e4d330f8006aa54d62f253465a2acfd1a61cdb3d4298"
         },
         {
           "version": "1.24.1",
@@ -171,7 +189,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:2c2e96c6bf5026398e6db15c10505791be87ff9cacc8a4e728a1ecff655009e3"
         },
         {
           "version": "1.24.0",
@@ -180,7 +199,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:4976b9ad3804b6aa0987ad567a6e876762a2f320de560f5b5c6dfefc02a4eb8b"
         },
         {
           "version": "1.23.0",
@@ -189,7 +209,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:072824bc3a77ffcb1f2b81069cae60a51b1fcc5ef406767df3ff5c50d52ca88f"
         },
         {
           "version": "1.22.0",
@@ -198,7 +219,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:ed19614ce84ece1cdb067dbcbc311612cec9ba57aa6b6811655a883b7131820b"
         },
         {
           "version": "1.21.5",
@@ -207,7 +229,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:a3e6741951b304b7ae75cc22de2f408061c16a08d51a5262b2f791bde0781a07"
         },
         {
           "version": "1.21.4",
@@ -216,7 +239,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:69d34105163d162e0c300e4bb636436982d678e3f2b459c2f4c6c98fce2a8447"
         },
         {
           "version": "1.21.3",
@@ -225,7 +249,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:a2fd36e4b73d1632d12e2b4417d3d1ac9676da62a967f530c44cd31d8d0e5ff8"
         },
         {
           "version": "1.21.2",
@@ -234,7 +259,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:5babe1f28fc3f315d2b0ad4034d79da05876ae73228ddf6a138df053f9407ed4"
         },
         {
           "version": "1.21.1",
@@ -243,7 +269,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:ef1f59e10b131b092038ccc6f6dacc3356d5298d501d5e8deb80c9aa08be1a64"
         },
         {
           "version": "1.21.0",
@@ -252,7 +279,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:09bb1588053d68d7f43a7dfc44f4a20179bd422461ebba778fd4edc7958ccc15"
         },
         {
           "version": "1.20.1",
@@ -261,7 +289,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:2ea5a2943cdd217eeab782255fa75f6fb119ff06f4e5c87e01ef156275549bb9"
         },
         {
           "version": "1.20.0",
@@ -270,7 +299,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:8e3c44eabebdef54bd6a0dd3244f0526221a5e3f15203d24e7690a1812e3f925"
         },
         {
           "version": "1.19.1",
@@ -279,7 +309,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:6ab046c73d79a9421863826ee2e8f1c37ca7183c421736ac042ce814d7e7eacb"
         },
         {
           "version": "1.19.0",
@@ -288,7 +319,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:f02f4aab93f5ed939f8d49a2c841dadcbb6023125b164822371f36102df930b2"
         },
         {
           "version": "1.18.6",
@@ -297,7 +329,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:7090babc86d98d63c64dfc25feadd3edb0591cdbd850e91a96bf7f3651436e76"
         },
         {
           "version": "1.18.5",
@@ -306,7 +339,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:f61cbce290643401e1513e1497f359952bc3653ce02af031eb6d1f5a41507f66"
         },
         {
           "version": "1.18.4",
@@ -315,7 +349,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:7e6ac003f55fcac90969bad50a4c3b715a741648a5a73a70025f13aa8026884f"
         },
         {
           "version": "1.18.3",
@@ -324,7 +359,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:1b682f60c40211e58bbd215481993b32ec88ec1a3c5a57043b6ca2cbfd53f59d"
         },
         {
           "version": "1.18.2",
@@ -333,7 +369,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:abd07e299a250ff801a947a2728525a8e637c1f4415f30e3c6d42d107c02d61b"
         },
         {
           "version": "1.18.1",
@@ -342,7 +379,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:1d3cd1e9a6e1417d38f1b4d36b8a1561cdb887523262b1fca599fa5a1a907c0b"
         },
         {
           "version": "1.18.0",
@@ -351,7 +389,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:982c6790cdcb97e441257373efc4bfa77c45a7e2b497481e75c205059fe7b426"
         },
         {
           "version": "1.17.0",
@@ -360,7 +399,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:a8c4d34e26be76dda7e9c7889be3eb6498f9608332fd57235aa6176c50bdd967"
         },
         {
           "version": "1.16.0",
@@ -369,7 +409,8 @@
             "gecko": {
               "strict_min_version": "115.0"
             }
-          }
+          },
+          "update_hash": "sha256:2e6a5feb03af4d8f2a347a99f877fd0b587066a23d85b9e91c458143b74de11f"
         }
       ]
     }
