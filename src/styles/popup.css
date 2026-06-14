@@ -476,6 +476,16 @@ header h1 {
 .track-node.n-current.c-green .node-circle { border: 2px dashed #16a34a; }
 .track-node.n-current.c-blue  .node-circle { border: 2px dashed #0ea5e9; }
 
+/* The current step's dashed ring rotates slowly — a calm "you are here /
+   do this next" marker. Slow (4s) so it reads as active, not a loading
+   spinner. The circle is empty in the current state, so nothing inside spins.
+   Off under reduced-motion. */
+.track-node.n-current .node-circle { animation: v4-step-spin 4s linear infinite; }
+@keyframes v4-step-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .track-node.n-current .node-circle { animation: none; }
+}
+
 .node-label {
   margin-top: 8px;
   max-width: 84px;
