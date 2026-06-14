@@ -248,27 +248,32 @@
   // existing lead) → Responded → Manuscript. Each node = [label, state, color,
   // highlight]; conn1/conn2 are the two connector colors. Contacted is lime
   // (yellow-green) so the bar sweeps warm → cool: lime → green → sky.
+  // Connector rule (keep the rail a consistent gradient): a connector carries
+  // the colour of the completed milestone it LEAVES; the rail stays coloured up
+  // to the current step, grey only beyond it. Contacted is always done, so
+  // conn1 is always lime. (Skip state is the one exception: when Responded is
+  // bypassed for a manuscript, conn2 reconnects in blue to the active step.)
   function makeTracker(leadStatus, manuscriptHas) {
     const C = ['Contacted', 'done', 'lime', false];
     let R, M, c1, c2;
     switch (leadStatus) {
       case 'no_response':
-        if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; c1 = 'gray';  c2 = 'gray'; }
+        if (manuscriptHas) { R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'current', 'blue', false]; c1 = 'lime';  c2 = 'blue'; }
         else               { R = ['Responded', 'current', 'green', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray'; }
         break;
       case 'response':
         R = ['Responded', 'done', 'green', true];
         M = manuscriptHas ? ['Manuscript', 'current', 'blue', false] : ['Manuscript', 'future', 'gray', false];
-        c1 = 'lime'; c2 = 'gray';
+        c1 = 'lime'; c2 = manuscriptHas ? 'green' : 'gray';
         break;
       case 'manuscript_received':
-        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'lime'; c2 = 'blue';
+        R = ['Responded', 'done', 'green', false]; M = ['Manuscript received', 'done', 'blue', true]; c1 = 'lime'; c2 = 'green';
         break;
       case 'rejected':
         R = ['Rejected', 'rejected', 'red', true]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray';
         break;
       default: // locked, invalid_email — no known sub-position
-        R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'gray'; c2 = 'gray';
+        R = ['Responded', 'future', 'gray', false]; M = ['Manuscript', 'future', 'gray', false]; c1 = 'lime'; c2 = 'gray';
     }
     const track = el('div', 'tracker');
     track.appendChild(makeNode.apply(null, C));
