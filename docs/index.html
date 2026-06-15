@@ -113,6 +113,26 @@
     <div class="step">
       <div class="step-head">
         <span class="step-num">2</span>
+        <div><h3>Get your V4 API key</h3></div>
+      </div>
+      <div class="step-body">
+        <p>Open <a href="https://v4.vdm-vsg.de" target="_blank" rel="noopener">v4.vdm-vsg.de</a>,
+          go to <strong>Account</strong>, and copy the <strong>API key</strong> shown below your
+          signatures. Keep it handy — you'll paste it in step&nbsp;5.</p>
+        <div class="shots">
+          <figure class="shot">
+            <img class="shot-img" src="images/key-account.png" alt="Copy the API key from your V4 Account page"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/key-account.png</code></span>
+            <figcaption>V4 → Account → the API key under your signatures.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">3</span>
         <div><h3>Allow internal add-ons (one-time)</h3></div>
       </div>
       <div class="step-body">
@@ -121,21 +141,21 @@
         <div class="callout">It only affects unsigned installs; signed add-ons still work as before.</div>
         <div class="shots">
           <figure class="shot">
-            <img class="shot-img" src="images/step-2a.png" alt="Open Thunderbird Settings"
+            <img class="shot-img" src="images/allow-settings.png" alt="Open Thunderbird Settings"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-2a.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/allow-settings.png</code></span>
             <figcaption>a. <strong>Thunderbird</strong> menu → <strong>Settings</strong> (on Windows/Linux: the <kbd>&#9776;</kbd> menu).</figcaption>
           </figure>
           <figure class="shot">
-            <img class="shot-img" src="images/step-2b.png" alt="Open the Config Editor"
+            <img class="shot-img" src="images/allow-config.png" alt="Open the Config Editor"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-2b.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/allow-config.png</code></span>
             <figcaption>b. <strong>General</strong> → scroll to the bottom → <strong>Config Editor…</strong> (accept the warning).</figcaption>
           </figure>
           <figure class="shot">
-            <img class="shot-img" src="images/step-2c.png" alt="Set xpinstall.signatures.required to false"
+            <img class="shot-img" src="images/allow-false.png" alt="Set xpinstall.signatures.required to false"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-2c.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/allow-false.png</code></span>
             <figcaption>c. Search <code>signatures.required</code> → double-click
               <code>xpinstall.signatures.required</code> so it reads <strong>false</strong>.</figcaption>
           </figure>
@@ -145,21 +165,21 @@
 
     <div class="step">
       <div class="step-head">
-        <span class="step-num">3</span>
+        <span class="step-num">4</span>
         <div><h3>Install from file</h3></div>
       </div>
       <div class="step-body">
         <div class="shots">
           <figure class="shot">
-            <img class="shot-img" src="images/step-3a.png" alt="Open Add-ons and Themes"
+            <img class="shot-img" src="images/install-addons.png" alt="Open Add-ons and Themes"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-3a.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/install-addons.png</code></span>
             <figcaption>a. <strong>Tools</strong> menu → <strong>Add-ons and Themes</strong>.</figcaption>
           </figure>
           <figure class="shot">
-            <img class="shot-img" src="images/step-3b.png" alt="Install Add-on From File"
+            <img class="shot-img" src="images/install-fromfile.png" alt="Install Add-on From File"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-3b.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/install-fromfile.png</code></span>
             <figcaption>b. Gear <kbd>&#9881;</kbd> (top-right) → <strong>Install Add-on From File…</strong>
               → choose the <code>.xpi</code> you downloaded → confirm <strong>Add</strong>.</figcaption>
           </figure>
@@ -169,19 +189,19 @@
 
     <div class="step">
       <div class="step-head">
-        <span class="step-num">4</span>
-        <div><h3>Add your API key</h3></div>
+        <span class="step-num">5</span>
+        <div><h3>Paste your API key</h3></div>
       </div>
       <div class="step-body">
         <p>Open <strong>Add-ons and Themes → V4 Contacts Checker → Preferences</strong>,
-          paste your V4 API key, and click <strong>Save</strong>.</p>
+          paste the API key you copied in step&nbsp;2, and click <strong>Save</strong>.</p>
         <p class="sub">You also need to be logged into <code>v4.vdm-vsg.de</code> in your browser
           for the Mark buttons to open the right lead.</p>
         <div class="shots">
           <figure class="shot">
-            <img class="shot-img" src="images/step-4.png" alt="Paste the API key in Preferences"
+            <img class="shot-img" src="images/key-paste.png" alt="Paste the API key in Preferences"
                  onerror="this.closest('.shot').classList.add('missing')">
-            <span class="shot-ph">Add <code>docs/images/step-4.png</code></span>
+            <span class="shot-ph">Add <code>docs/images/key-paste.png</code></span>
             <figcaption>The add-on's <strong>Preferences</strong> tab, with the API-key field.</figcaption>
           </figure>
         </div>
