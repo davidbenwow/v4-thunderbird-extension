@@ -30,7 +30,6 @@
     .dl-btn:hover { background:var(--brand-600); }
     .dl-btn:active { transform:scale(.98); }
     .ver { margin-top:12px; font-size:13px; color:var(--ink-400); }
-    .ver code { color:var(--ink-500); }
     .save-note { margin-top:6px; font-size:12px; color:var(--ink-400); }
 
     .section-title { font-size:13px; font-weight:700; letter-spacing:.8px;
@@ -62,12 +61,14 @@
     }
     .step-body { padding-left:38px; }
 
-    .shot { margin-top:14px; }
+    .shots { margin-top:14px; display:flex; flex-direction:column; gap:16px; }
+    figure.shot { margin:0; }
     .shot-img { max-width:100%; border-radius:10px; border:1px solid var(--ink-200); display:block; }
+    figure.shot figcaption { margin-top:6px; font-size:12px; color:var(--ink-400); }
     .shot-ph { display:none; }
     .shot.missing .shot-img { display:none; }
     .shot.missing .shot-ph {
-      display:flex; align-items:center; justify-content:center; min-height:120px;
+      display:flex; align-items:center; justify-content:center; min-height:110px;
       border:2px dashed var(--ink-200); border-radius:10px; color:var(--ink-400);
       font-size:13px; background:var(--ink-50); text-align:center; padding:12px;
     }
@@ -106,11 +107,6 @@
       <div class="step-body">
         <p>Click <strong>Download latest</strong> above and save
           <code>v4_contacts-latest.xpi</code> somewhere you can find it (e.g. Downloads).</p>
-        <div class="shot">
-          <img class="shot-img" src="images/step-1.png" alt="Download step"
-               onerror="this.closest('.shot').classList.add('missing')">
-          <span class="shot-ph">Screenshot slot — add <code>docs/images/step-1.png</code></span>
-        </div>
       </div>
     </div>
 
@@ -121,19 +117,28 @@
       </div>
       <div class="step-body">
         <p>This add-on is distributed internally, so it isn't signed by the public add-on store.
-          You only need to do this once:</p>
-        <ol>
-          <li>Thunderbird menu <kbd>&#9776;</kbd> → <strong>Settings</strong></li>
-          <li>Scroll to the bottom → <strong>Config Editor…</strong> → accept the warning</li>
-          <li>Search <code>xpinstall.signatures.required</code></li>
-          <li>Double-click it so the value becomes <strong>false</strong></li>
-        </ol>
-        <div class="callout">This is the standard switch for internally-distributed Thunderbird
-          add-ons. It only affects unsigned installs; signed add-ons still work as before.</div>
-        <div class="shot">
-          <img class="shot-img" src="images/step-2.png" alt="Config editor step"
-               onerror="this.closest('.shot').classList.add('missing')">
-          <span class="shot-ph">Screenshot slot — add <code>docs/images/step-2.png</code></span>
+          You only need to do this once.</p>
+        <div class="callout">It only affects unsigned installs; signed add-ons still work as before.</div>
+        <div class="shots">
+          <figure class="shot">
+            <img class="shot-img" src="images/step-2a.png" alt="Open Thunderbird Settings"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-2a.png</code></span>
+            <figcaption>a. <strong>Thunderbird</strong> menu → <strong>Settings</strong> (on Windows/Linux: the <kbd>&#9776;</kbd> menu).</figcaption>
+          </figure>
+          <figure class="shot">
+            <img class="shot-img" src="images/step-2b.png" alt="Open the Config Editor"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-2b.png</code></span>
+            <figcaption>b. <strong>General</strong> → scroll to the bottom → <strong>Config Editor…</strong> (accept the warning).</figcaption>
+          </figure>
+          <figure class="shot">
+            <img class="shot-img" src="images/step-2c.png" alt="Set xpinstall.signatures.required to false"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-2c.png</code></span>
+            <figcaption>c. Search <code>signatures.required</code> → double-click
+              <code>xpinstall.signatures.required</code> so it reads <strong>false</strong>.</figcaption>
+          </figure>
         </div>
       </div>
     </div>
@@ -144,15 +149,20 @@
         <div><h3>Install from file</h3></div>
       </div>
       <div class="step-body">
-        <ol>
-          <li>Thunderbird menu <kbd>&#9776;</kbd> → <strong>Add-ons and Themes</strong></li>
-          <li>Click the gear <kbd>&#9881;</kbd> (top-right) → <strong>Install Add-on From File…</strong></li>
-          <li>Choose the <code>.xpi</code> you downloaded → confirm <strong>Add</strong></li>
-        </ol>
-        <div class="shot">
-          <img class="shot-img" src="images/step-3.png" alt="Install from file step"
-               onerror="this.closest('.shot').classList.add('missing')">
-          <span class="shot-ph">Screenshot slot — add <code>docs/images/step-3.png</code></span>
+        <div class="shots">
+          <figure class="shot">
+            <img class="shot-img" src="images/step-3a.png" alt="Open Add-ons and Themes"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-3a.png</code></span>
+            <figcaption>a. <strong>Tools</strong> menu → <strong>Add-ons and Themes</strong>.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img class="shot-img" src="images/step-3b.png" alt="Install Add-on From File"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-3b.png</code></span>
+            <figcaption>b. Gear <kbd>&#9881;</kbd> (top-right) → <strong>Install Add-on From File…</strong>
+              → choose the <code>.xpi</code> you downloaded → confirm <strong>Add</strong>.</figcaption>
+          </figure>
         </div>
       </div>
     </div>
@@ -167,10 +177,13 @@
           paste your V4 API key, and click <strong>Save</strong>.</p>
         <p class="sub">You also need to be logged into <code>v4.vdm-vsg.de</code> in your browser
           for the Mark buttons to open the right lead.</p>
-        <div class="shot">
-          <img class="shot-img" src="images/step-4.png" alt="API key step"
-               onerror="this.closest('.shot').classList.add('missing')">
-          <span class="shot-ph">Screenshot slot — add <code>docs/images/step-4.png</code></span>
+        <div class="shots">
+          <figure class="shot">
+            <img class="shot-img" src="images/step-4.png" alt="Paste the API key in Preferences"
+                 onerror="this.closest('.shot').classList.add('missing')">
+            <span class="shot-ph">Add <code>docs/images/step-4.png</code></span>
+            <figcaption>The add-on's <strong>Preferences</strong> tab, with the API-key field.</figcaption>
+          </figure>
         </div>
       </div>
     </div>
