@@ -17,6 +17,10 @@
       -webkit-font-smoothing:antialiased;
     }
     .wrap { max-width:720px; margin:0 auto; padding:48px 20px 64px; }
+    .back-link { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:500;
+      color:var(--ink-500); text-decoration:none; border:1px solid var(--ink-200);
+      padding:6px 12px; border-radius:8px; margin-bottom:24px; }
+    .back-link:hover { border-color:var(--ink-400); color:var(--ink-900); }
     .hero { text-align:center; }
     .hero img.logo { width:72px; height:72px; border-radius:16px; }
     .hero .logo-tile { width:72px; height:72px; border-radius:16px; background:var(--brand-100);
@@ -88,6 +92,7 @@
 </head>
 <body>
   <div class="wrap">
+    <a class="back-link" href="../">&larr; All plugins</a>
     <div class="hero">
       <span class="logo-tile" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="#cf6516" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
