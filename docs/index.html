@@ -19,6 +19,9 @@
     .wrap { max-width:720px; margin:0 auto; padding:48px 20px 64px; }
     .hero { text-align:center; }
     .hero img.logo { width:72px; height:72px; border-radius:16px; }
+    .hero .logo-tile { width:72px; height:72px; border-radius:16px; background:var(--brand-100);
+      display:inline-flex; align-items:center; justify-content:center; }
+    .hero .logo-tile svg { width:40px; height:40px; }
     h1 { font-size:30px; margin:16px 0 6px; letter-spacing:-0.4px; }
     .tagline { color:var(--ink-500); font-size:16px; margin:0 auto 24px; max-width:520px; }
     .dl-btn {
@@ -86,8 +89,11 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <img class="logo" src="images/icon-96.png" alt="V4 Contacts Checker logo"
-           onerror="this.style.display='none'">
+      <span class="logo-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#cf6516" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 21a8 8 0 0 1 13.292-6"/><circle cx="10" cy="8" r="5"/><path d="m16 19 2 2 4-4"/>
+        </svg>
+      </span>
       <h1>V4 Contacts Checker</h1>
       <p class="tagline">Checks whether email addresses in your Thunderbird messages are already
         leads in V4 Contacts, shows each lead's live status, and lets you jump straight to the
