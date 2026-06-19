@@ -1,13 +1,13 @@
 {
   "manifest_version": 2,
   "name": "V4 Contacts Checker",
-  "version": "1.31.0",
+  "version": "1.31.1",
   "description": "Checks whether email addresses in Thunderbird messages are already leads in V4 Contacts, and lets you jump to the lead's page in v4.vdm-vsg.de to mark it.",
   "browser_specific_settings": {
     "gecko": {
       "id": "v4-contacts@snap-collective.com",
       "strict_min_version": "115.0",
-      "update_url": "https://thunderbird.omniscriptum.it/v4-contacts/updates.json"
+      "update_url": "https://thunderbird.omniscriptum.it/thunderbird-plugins/v4-contacts/updates.json"
     }
   },
   "icons": {
