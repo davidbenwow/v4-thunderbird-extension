@@ -3,6 +3,16 @@
     "v4-contacts@snap-collective.com": {
       "updates": [
         {
+          "version": "1.31.2",
+          "update_link": "https://thunderbird.omniscriptum.it/thunderbird-plugins/v4-contacts/releases/v4_contacts-1.31.2.xpi",
+          "update_hash": "sha256:859d30e27f0d23fef1330cb2d4f0fa542e56e76e61c516b10b2e2f302a361e22",
+          "applications": {
+            "gecko": {
+              "strict_min_version": "115.0"
+            }
+          }
+        },
+        {
           "version": "1.31.1",
           "update_link": "https://thunderbird.omniscriptum.it/thunderbird-plugins/v4-contacts/releases/v4_contacts-1.31.1.xpi",
           "update_hash": "sha256:0a94d23447f701cac13caab383f1bbf09685e0fd7ad7428ac312f11adf22e79b",

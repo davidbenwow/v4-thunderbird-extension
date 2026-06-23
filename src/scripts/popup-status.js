@@ -99,17 +99,19 @@
     markBtn.title = 'Open this lead in V4 and mark their status as manuscript received.';
   }
 
-  // Status-mode variants. "Mark as Response" is the call-to-action when the
-  // V4 status is still no_response and the lead just emailed — exactly the
-  // moment the team's workflow says to mark "Response" in the CRM.
-  function setResponseButtonState(markBtn) {
+  // Status-mode CTA when the V4 status is still no_response and the lead just
+  // emailed. Neutral on outcome: a reply may be a response OR a rejection, and
+  // the editor sets the actual status in V4 — so the label/colour must not
+  // pre-commit to "response". Muted styling (same as "Open in V4"); the pencil
+  // keeps the "you'll mark something" affordance.
+  function setMarkButtonState(markBtn) {
     while (markBtn.firstChild) markBtn.removeChild(markBtn.firstChild);
     markBtn.appendChild(makePencilGlyph());
-    markBtn.appendChild(el('span', 'mark-label', 'Mark as response'));
+    markBtn.appendChild(el('span', 'mark-label', 'Mark lead in V4'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
-    markBtn.classList.add('act-response');  // green — matches V4's response button
-    markBtn.title = 'Open this lead in V4 and mark their status as response.';
+    markBtn.classList.add('secondary');  // muted — outcome decided in V4
+    markBtn.title = 'Open this lead in V4 and set its status (e.g. responded or rejected).';
   }
 
   // Informational "Open in V4" — shown when no marking action is needed
@@ -307,9 +309,8 @@
       markBtn.dataset.terminal = '1';
       setManuscriptButtonState(markBtn);
       markBtn.classList.add('fill-blue');
-    } else { // no_response, no manuscript
-      setResponseButtonState(markBtn);
-      markBtn.classList.add('fill-green');
+    } else { // no_response, no manuscript — neutral "Mark lead in V4" (muted)
+      setMarkButtonState(markBtn);
     }
     return markBtn;
   }
@@ -404,7 +405,7 @@
         markBtn.dataset.terminal = '1';
         setManuscriptButtonState(markBtn);
       } else if (leadStatus === 'no_response') {
-        setResponseButtonState(markBtn);
+        setMarkButtonState(markBtn);
       } else {                                 // response, no manuscript
         setOpenOnlyButtonState(markBtn);
       }

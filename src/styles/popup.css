@@ -549,12 +549,6 @@ header h1 {
   font-size: 14px;
   border-radius: 10px;
 }
-.mark-btn.btn-block.fill-green {
-  background: #34a853; border-color: #34a853; color: #fff;
-}
-.mark-btn.btn-block.fill-green:hover {
-  background: #2e9549; border-color: #2e9549; color: #fff;
-}
 .mark-btn.btn-block.fill-blue {
   background: #4a90e2; border-color: #4a90e2; color: #fff;
 }
@@ -708,23 +702,11 @@ header h1 {
   outline-color: var(--ink-300);
 }
 
-/* Mark-action buttons carry the V4 color language (green = response,
-   blue = manuscript) so the button you click here looks like the button
-   you'll click there. Text uses the darker shade for contrast; borders
-   the brighter one. */
-.mark-btn.act-response {
-  color: var(--resp-700);
-  border-color: var(--resp-500);
-}
-
-.mark-btn.act-response:hover {
-  background: var(--resp-bg);
-  border-color: var(--resp-700);
-  color: var(--resp-700);
-}
-
-.mark-btn.act-response:focus-visible { outline-color: var(--resp-500); }
-
+/* The manuscript mark-action button carries the V4 colour language (blue =
+   manuscript) so the button you click here looks like the button you'll click
+   there. Text uses the darker shade for contrast; the border the brighter one.
+   (The no_response CTA is intentionally neutral/muted — a reply may be a
+   response or a rejection — so it uses .secondary, not a coloured class.) */
 .mark-btn.act-manuscript {
   color: var(--manu-700);
   border-color: var(--manu-600);
