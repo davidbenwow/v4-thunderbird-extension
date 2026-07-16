@@ -56,7 +56,7 @@ with open('docs/updates.json', 'r') as f:
 addon_id = 'v4-contacts@snap-collective.com'
 new_entry = {
     'version': '$NEW_VERSION',
-    'update_link': f'https://thunderbird.omniscriptum.it/thunderbird-plugins/v4-contacts/releases/v4_contacts-$NEW_VERSION.xpi',
+    'update_link': f'https://davidbenwow.github.io/thunderbird-plugins/v4-contacts/releases/v4_contacts-$NEW_VERSION.xpi',
     'update_hash': 'sha256:' + os.environ['XPI_HASH'],
     'applications': {
         'gecko': {
