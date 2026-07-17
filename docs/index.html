@@ -103,7 +103,7 @@
       <p class="tagline">Checks whether email addresses in your Thunderbird messages are already
         leads in V4 Contacts, shows each lead's live status, and lets you jump straight to the
         right next action in v4.vdm-vsg.de.</p>
-      <a class="dl-btn" id="dl" href="releases/v4_contacts-latest.xpi" download>Download latest</a>
+      <a class="dl-btn" id="dl" href="v4_contacts-latest.xpi" download>Download latest</a>
       <div class="ver">Current version: <span id="ver">latest</span></div>
       <div class="save-note">Tip: <em>save</em> the file — don't open it in the browser.</div>
     </div>
@@ -226,12 +226,12 @@
 
     <footer>
       Internal tool for OmniScriptum ·
-      <a href="updates.json">version history</a>
+      <a href="https://davidbenwow.github.io/thunderbird-plugins/v4-contacts/updates.json">version history</a>
     </footer>
   </div>
 
   <script>
-    fetch('updates.json')
+    fetch('https://davidbenwow.github.io/thunderbird-plugins/v4-contacts/updates.json')
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var u = d.addons['v4-contacts@snap-collective.com'].updates[0];

@@ -44,6 +44,7 @@ XPI_HASH="$(shasum -a 256 "$XPI" | awk '{print $1}')"
 cp "$XPI" "releases/v4_contacts-$NEW_VERSION.xpi"
 cp "$XPI" "docs/releases/v4_contacts-$NEW_VERSION.xpi"
 cp "$XPI" "docs/releases/v4_contacts-latest.xpi"
+cp "$XPI" "docs/v4_contacts-latest.xpi"
 echo "Copied XPI to releases/, docs/releases/, and docs/releases/v4_contacts-latest.xpi"
 
 # Update docs/updates.json — prepend a new entry so newest is first. update_hash
