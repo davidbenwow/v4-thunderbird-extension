@@ -20,5 +20,5 @@ Step 4 — install from file:
 Step 5 — paste your API key:
 - `key-paste.png` — the add-on's Preferences tab with the API-key field
 
-`icon-96.png` is the page logo (copied from `src/images/icon-96.png`).
+`logo-144.png` is the page logo (the plugin logo at 2× of its 72 px display size).
 Step 1 (download) needs no screenshot — it's the button on the page.

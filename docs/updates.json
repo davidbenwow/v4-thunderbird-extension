@@ -3,6 +3,16 @@
     "v4-contacts@snap-collective.com": {
       "updates": [
         {
+          "version": "1.31.4",
+          "update_link": "https://davidbenwow.github.io/thunderbird-plugins/v4-contacts/releases/v4_contacts-1.31.4.xpi",
+          "update_hash": "sha256:5acb769a4d35ac3bff30d759e74afae614f6d3b3119d067b8cfb5b92fcd66629",
+          "applications": {
+            "gecko": {
+              "strict_min_version": "115.0"
+            }
+          }
+        },
+        {
           "version": "1.31.3",
           "update_link": "https://davidbenwow.github.io/thunderbird-plugins/v4-contacts/releases/v4_contacts-1.31.3.xpi",
           "update_hash": "sha256:2ed472f46b852c95382787bd4549e6f7fb45f032752f0e1d758d3e5e59f83737",
