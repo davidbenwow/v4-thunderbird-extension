@@ -34,7 +34,7 @@
       }
       if (config && !config.apiKey) {
         lastEl.textContent = 'no API key configured — no API calls';
-        lastEl.style.color = '#dc2626';
+        lastEl.style.color = '#A32D2D';
         return;
       }
       const r = await browser.storage.local.get('lastCheck:v1');
@@ -43,7 +43,7 @@
         lastEl.textContent = lc.ok
           ? `${relativeTime(lc.at)} ✓`
           : `${relativeTime(lc.at)} — failed (${lc.error || 'unknown error'})`;
-        lastEl.style.color = lc.ok ? '' : '#dc2626';
+        lastEl.style.color = lc.ok ? '' : '#A32D2D';
       }
     } catch (e) { /* diagnostics are best effort */ }
   }
@@ -89,7 +89,7 @@
 
     if (!rawKey) {
       saveStatus.textContent = 'Please enter a key';
-      saveStatus.style.color = '#dc2626';
+      saveStatus.style.color = '#A32D2D';
       setTimeout(() => {
         saveStatus.textContent = '';
         saveStatus.style.color = '';
@@ -106,7 +106,7 @@
       // Without this catch a storage/IPC failure exits the handler silently —
       // the user assumes the key was saved when it wasn't.
       saveStatus.textContent = 'Save failed — please try again';
-      saveStatus.style.color = '#dc2626';
+      saveStatus.style.color = '#A32D2D';
       setTimeout(() => {
         saveStatus.textContent = '';
         saveStatus.style.color = '';

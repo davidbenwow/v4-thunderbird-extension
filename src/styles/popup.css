@@ -1,10 +1,11 @@
 /* =====================================================================
-   V4 Contacts Checker — v1.5 stylesheet
-   Design principles:
-   - Calm monochromatic base
-   - One accent color (omni orange) used sparingly
-   - System-native typography with proper scale
-   - Restrained semantic color use
+   V4 Contacts Checker stylesheet — "Ink and apricot" design language
+   - Warm neutral base: cream page, white surfaces, hairline borders
+   - Orange is the logo mark only — never a button, border or fill
+   - One filled (ink) button per view; every other action is outlined
+   - Status = tint + coloured text. The V4 hues keep their meaning
+     (lime contacted → green responded → blue manuscript, red rejected)
+     but live in the same muted register as the spec's status tokens
    ===================================================================== */
 
 :root {
@@ -12,45 +13,75 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
                system-ui, Arial, sans-serif;
 
-  /* Neutral palette */
-  --ink-900: #0f1729;
-  --ink-700: #2b3547;
-  --ink-500: #5a6578;
-  --ink-400: #8592a6;
-  --ink-300: #bcc5d4;
-  --ink-200: #dfe4ec;
-  --ink-100: #eef1f6;
-  --ink-50:  #f7f9fc;
-  --surface: #ffffff;
+  /* Surfaces & borders */
+  --page-bg:        #F7F5F2;
+  --surface:        #FFFFFF;
+  --surface-muted:  #F1EDE7;   /* file pill, neutral status pill */
+  --surface-tint:   #FBF7F2;   /* manuscript file panel inside the card */
+  --border:         #E6E1DA;   /* default hairline */
+  --border-strong:  #D6CFC6;   /* outlined buttons, inputs */
 
-  /* Brand */
-  --brand-500: #e7741b;         /* omni orange */
-  --brand-600: #cf6516;
-  --brand-100: #fdf1e6;
+  /* Text */
+  --text-primary:   #1F1B18;
+  --text-secondary: #6B645D;
+  --text-muted:     #9A928A;
+  --text-accent:    #9A4A22;   /* accent text on apricot/cream tints, links */
 
-  /* Semantic */
-  --status-used:    #dc2626;
-  --status-used-bg: #fef2f2;
-  --status-pend:    #ea8c16;
-  --status-pend-bg: #fff7ed;
-  --status-ok:      #16a34a;
-  --status-ok-bg:   #f0fdf4;
-  --status-err:     #dc2626;
+  /* Primary action — exactly one filled button per view */
+  --primary:        #2B2622;
+  --primary-hover:  #3D3631;
+  --primary-active: #1F1B18;
+  --on-primary:     #FFFFFF;
 
-  /* V4 status color language (green = response, blue = manuscript,
-     red = rejected) — single palette consumed by both the status pills
-     (.st-*) and the action buttons (.act-*). */
-  --resp-700: #15803d;  --resp-500: #16a34a;  --resp-bg: #f0fdf4;
-  --manu-700: #0369a1;  --manu-500: #0ea5e9;  --manu-600: #0284c7;  --manu-bg: #f0f9ff;
-  --rej-700:  #b91c1c;  --rej-500:  #dc2626;  --rej-bg:  #fef2f2;
+  /* Secondary / outlined action */
+  --secondary-bg:       #FFFFFF;
+  --secondary-border:   #D6CFC6;
+  --secondary-text:     #2B2622;
+  --secondary-hover-bg: #F7F5F2;
 
-  /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 41, 0.04);
-  --shadow-md: 0 2px 8px rgba(15, 23, 41, 0.08);
-  --shadow-btn: 0 1px 2px rgba(231, 116, 27, 0.25),
-                0 2px 4px rgba(231, 116, 27, 0.15);
-  --shadow-btn-hover: 0 2px 4px rgba(231, 116, 27, 0.3),
-                     0 4px 10px rgba(231, 116, 27, 0.2);
+  /* Selected / apricot tint — the avatar initials */
+  --selected-bg:     #FBEFE6;
+  --selected-border: #F0C9AE;
+  --selected-text:   #9A4A22;
+
+  /* Focus ring & shape */
+  --focus-ring:     0 0 0 2px #FFFFFF, 0 0 0 4px #9A4A22;
+  --radius-control: 8px;
+  --radius-card:    12px;
+
+  /* Legacy neutral names, aliased to the spec tokens so every rule that
+     still says --ink-* picks up the warm palette. */
+  --ink-900: var(--text-primary);
+  --ink-700: var(--primary);
+  --ink-500: var(--text-secondary);
+  --ink-400: var(--text-muted);
+  --ink-300: var(--border-strong);
+  --ink-200: var(--border);
+  --ink-100: var(--surface-muted);
+  --ink-50:  var(--page-bg);
+
+  /* V4 status colour language — lime = contacted, green = responded,
+     blue = manuscript, red = rejected. Green/red are the spec's
+     success/danger tokens; lime and blue are derived at the same lightness
+     and saturation so the four read as one family. A status is always
+     shown as tint + coloured text (the spec's badge style), never as a
+     white-on-colour fill. Consumed by the tracker (.c-*), the status pills
+     (.st-*), the "opened" button and the list-row dots. TRACK_HEX in
+     popup-status.js mirrors these for the rail gradient. */
+  --st-lime:  #6D8E29;  --st-lime-bg:  #EFF4E6;
+  --st-green: #2E7D57;  --st-green-bg: #E8F3EC;
+  --st-blue:  #35688C;  --st-blue-bg:  #E6EEF4;
+  --st-red:   #A32D2D;  --st-red-bg:   #FCEBEB;
+  --st-warn:  #8F5719;  --st-warn-bg:  #FBF3E6;
+
+  --status-used: var(--st-red);    --status-used-bg: var(--st-red-bg);
+  --status-pend: var(--st-warn);   --status-pend-bg: var(--st-warn-bg);
+  --status-ok:   var(--st-green);  --status-ok-bg:   var(--st-green-bg);
+  --status-err:  var(--st-red);
+
+  /* Elevation — neutral only; buttons carry no coloured shadow */
+  --shadow-sm: 0 1px 2px rgba(31, 27, 24, 0.04);
+  --shadow-md: 0 2px 8px rgba(31, 27, 24, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -77,9 +108,9 @@ header {
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  background: var(--ink-900);
-  color: white;
-  border-bottom: 1px solid var(--ink-900);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
 }
 
 .v4-logo {
@@ -93,7 +124,7 @@ header h1 {
   font-weight: 600;
   letter-spacing: -0.1px;
   margin: 0;
-  color: white;
+  color: var(--text-primary);
 }
 
 /* ========== State containers ======================================== */
@@ -125,7 +156,7 @@ header h1 {
   width: 20px;
   height: 20px;
   border: 2px solid var(--ink-200);
-  border-top-color: var(--brand-500);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
   margin: 0 auto 12px;
@@ -154,7 +185,7 @@ header h1 {
   font-weight: 700;
   font-size: 14px;
   flex-shrink: 0;
-  border: 1px solid rgba(22, 163, 74, 0.15);
+  border: 1px solid var(--border);
 }
 
 .no-leads-title {
@@ -379,15 +410,15 @@ header h1 {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--ink-100);
+  border-bottom: 1px solid var(--border);
 }
 
 .lead-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--ink-900);
-  color: #fff;
+  background: var(--selected-bg);
+  color: var(--selected-text);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -431,7 +462,7 @@ header h1 {
 .card-ident-sub {
   font-size: 13px;
   font-weight: 500;
-  color: var(--ink-400);
+  color: var(--text-secondary);
   letter-spacing: -0.1px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -468,13 +499,13 @@ header h1 {
 
 .node-glyph { width: 16px; height: 16px; color: #fff; }
 
-.track-node.n-done.c-lime   .node-circle { background: #65a30d; border-color: #65a30d; }
-.track-node.n-done.c-green  .node-circle { background: #16a34a; border-color: #16a34a; }
-.track-node.n-done.c-blue   .node-circle { background: #0ea5e9; border-color: #0ea5e9; }
-.track-node.n-rejected      .node-circle { background: #dc2626; border-color: #dc2626; }
-.track-node.n-current.c-lime  .node-circle { border: 2px dashed #65a30d; }
-.track-node.n-current.c-green .node-circle { border: 2px dashed #16a34a; }
-.track-node.n-current.c-blue  .node-circle { border: 2px dashed #0ea5e9; }
+.track-node.n-done.c-lime   .node-circle { background: var(--st-lime); border-color: var(--st-lime); }
+.track-node.n-done.c-green  .node-circle { background: var(--st-green); border-color: var(--st-green); }
+.track-node.n-done.c-blue   .node-circle { background: var(--st-blue); border-color: var(--st-blue); }
+.track-node.n-rejected      .node-circle { background: var(--st-red); border-color: var(--st-red); }
+.track-node.n-current.c-lime  .node-circle { border: 2px dashed var(--st-lime); }
+.track-node.n-current.c-green .node-circle { border: 2px dashed var(--st-green); }
+.track-node.n-current.c-blue  .node-circle { border: 2px dashed var(--st-blue); }
 
 /* The current step's dashed ring rotates slowly — a calm "you are here /
    do this next" marker. Slow (4s) so it reads as active, not a loading
@@ -496,18 +527,18 @@ header h1 {
   color: var(--ink-400);
 }
 
-.track-node.c-lime  .node-label-em { color: #4d7c0f; font-weight: 700; }
-.track-node.c-green .node-label-em { color: #15803d; font-weight: 700; }
-.track-node.c-blue  .node-label-em { color: #0369a1; font-weight: 700; }
-.track-node.c-red   .node-label-em { color: #b91c1c; font-weight: 700; }
+.track-node.c-lime  .node-label-em { color: var(--st-lime); font-weight: 700; }
+.track-node.c-green .node-label-em { color: var(--st-green); font-weight: 700; }
+.track-node.c-blue  .node-label-em { color: var(--st-blue); font-weight: 700; }
+.track-node.c-red   .node-label-em { color: var(--st-red); font-weight: 700; }
 
-/* Highlighted (current/settled) status: a FILLED pill in the same colour as
-   the node's tick, white text — so the live status reads at a glance and
-   matches its circle above. No dot. */
-.node-label-hl { padding: 4px 10px; border-radius: 10px; }
-.track-node.c-green .node-label-hl { background: #16a34a; color: #fff; }
-.track-node.c-blue  .node-label-hl { background: #0ea5e9; color: #fff; }
-.track-node.c-red   .node-label-hl { background: #dc2626; color: #fff; }
+/* Highlighted (settled) status: a tinted badge in the node's colour —
+   the spec's "Ready" badge style (status-bg + status-text), so the live
+   status reads at a glance and matches its circle above. No dot. */
+.node-label-hl { padding: 4px 10px; border-radius: var(--radius-control); }
+.track-node.c-green .node-label-hl { background: var(--st-green-bg); color: var(--st-green); }
+.track-node.c-blue  .node-label-hl { background: var(--st-blue-bg);  color: var(--st-blue); }
+.track-node.c-red   .node-label-hl { background: var(--st-red-bg);   color: var(--st-red); }
 
 .track-conn {
   flex: 1 1 auto;
@@ -527,7 +558,10 @@ header h1 {
   margin-top: 16px;
   padding: 10px 12px;
   font-size: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
 }
 .ms-badge.badge-block .ms-glyph { width: 14px; height: 14px; }
 .ms-badge.badge-block .ms-name { flex: 1; }
@@ -547,38 +581,31 @@ header h1 {
   margin-top: 12px;
   padding: 12px 14px;
   font-size: 14px;
-  border-radius: 10px;
-}
-.mark-btn.btn-block.fill-blue {
-  background: #4a90e2; border-color: #4a90e2; color: #fff;
-}
-.mark-btn.btn-block.fill-blue:hover {
-  background: #3a7fce; border-color: #3a7fce; color: #fff;
+  border-radius: var(--radius-control);
 }
 
 /* ========== V4 lead-status pill (status mode) ======================== */
-/* Filled pill: background is the V4 status colour (green = response,
-   blue = manuscript, red = rejected; neutral grey = no response), white
-   text, no dot — matching the tracker's tick + highlighted-label style so
-   every status chip in the UI reads the same. */
+/* Tinted badge: status-bg + status-text in the V4 status colour (green =
+   response, blue = manuscript, red = rejected; neutral for no response), no
+   dot — the same badge style as the tracker's highlighted label, so every
+   status chip in the UI reads the same. */
 .status-pill-wrap { line-height: 1; }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.1px;
   white-space: nowrap;
-  color: #fff;
 }
 
-.st-gray  { background: #5a6578; }
-.st-blue  { background: #0ea5e9; }
-.st-green { background: #16a34a; }
-.st-red   { background: #dc2626; }
+.st-gray  { background: var(--surface-muted); color: var(--text-secondary); }
+.st-blue  { background: var(--st-blue-bg);    color: var(--st-blue); }
+.st-green { background: var(--st-green-bg);   color: var(--st-green); }
+.st-red   { background: var(--st-red-bg);     color: var(--st-red); }
 
 /* Demoted email + source line under the status pill. */
 .lead-subtitle {
@@ -609,16 +636,17 @@ header h1 {
   flex-shrink: 0;
 }
 
-/* The Mark button — primary CTA, outlined style so the brand logo reads in its original color */
+/* Buttons. Every .mark-btn is the outlined secondary by default;
+   .act-manuscript is the view's single filled (ink) primary. */
 .mark-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
-  background: var(--surface);
-  color: var(--brand-600);
-  border: 1.5px solid var(--brand-500);
-  border-radius: 6px;
+  background: var(--secondary-bg);
+  color: var(--secondary-text);
+  border: 1.5px solid var(--secondary-border);
+  border-radius: var(--radius-control);
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
@@ -628,20 +656,18 @@ header h1 {
 }
 
 .mark-btn:hover {
-  background: var(--brand-100);
-  border-color: var(--brand-600);
-  color: var(--brand-600);
-  transform: translateY(-1px);
+  background: var(--secondary-hover-bg);
+  border-color: var(--secondary-border);
+  color: var(--text-primary);
 }
 
 .mark-btn:active {
-  transform: translateY(0);
-  background: var(--brand-100);
+  background: var(--surface-muted);
 }
 
 .mark-btn:focus-visible {
-  outline: 2px solid var(--brand-500);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .mark-glyph {
@@ -655,19 +681,15 @@ header h1 {
 /* Persisted "Opened in browser" state: green-tinted outline, still clickable
    so the user can re-open V4 for this lead if they need to. */
 .mark-btn.opened {
-  color: var(--status-ok);
-  border-color: var(--status-ok);
-  background: var(--status-ok-bg, rgba(22, 163, 74, 0.08));
+  color: var(--st-green);
+  border-color: var(--secondary-border);
+  background: var(--st-green-bg);
 }
 
 .mark-btn.opened:hover {
-  background: var(--status-ok-bg, rgba(22, 163, 74, 0.14));
-  border-color: var(--status-ok);
-  color: var(--status-ok);
-}
-
-.mark-btn.opened:focus-visible {
-  outline-color: var(--status-ok);
+  background: var(--st-green-bg);
+  border-color: var(--st-green);
+  color: var(--st-green);
 }
 
 .mark-check {
@@ -687,38 +709,38 @@ header h1 {
 
 /* Informational "Open in V4" — no action needed, muted outline */
 .mark-btn.secondary {
-  color: var(--ink-500);
-  border-color: var(--ink-200);
-  background: var(--surface);
+  color: var(--secondary-text);
+  border-color: var(--secondary-border);
+  background: var(--secondary-bg);
 }
 
 .mark-btn.secondary:hover {
-  background: var(--ink-50);
-  border-color: var(--ink-300);
-  color: var(--ink-700);
+  background: var(--secondary-hover-bg);
+  border-color: var(--secondary-border);
+  color: var(--text-primary);
 }
 
-.mark-btn.secondary:focus-visible {
-  outline-color: var(--ink-300);
-}
-
-/* The manuscript mark-action button carries the V4 colour language (blue =
-   manuscript) so the button you click here looks like the button you'll click
-   there. Text uses the darker shade for contrast; the border the brighter one.
-   (The no_response CTA is intentionally neutral/muted — a reply may be a
-   response or a rejection — so it uses .secondary, not a coloured class.) */
+/* The manuscript mark-action is the one filled button in the view (ink
+   primary). The step it advances to is coloured in the tracker right above,
+   so the button itself carries no status colour. (The no_response CTA is
+   intentionally neutral — a reply may be a response or a rejection — so it
+   uses .secondary.) */
 .mark-btn.act-manuscript {
-  color: var(--manu-700);
-  border-color: var(--manu-600);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
 }
 
 .mark-btn.act-manuscript:hover {
-  background: var(--manu-bg);
-  border-color: var(--manu-700);
-  color: var(--manu-700);
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: var(--on-primary);
 }
 
-.mark-btn.act-manuscript:focus-visible { outline-color: var(--manu-600); }
+.mark-btn.act-manuscript:active {
+  background: var(--primary-active);
+  border-color: var(--primary-active);
+}
 
 /* Suppress hover lift while a click is in flight */
 .mark-btn.dispatching {
@@ -731,10 +753,10 @@ header h1 {
 .icon-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--ink-200);
-  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  background: var(--secondary-bg);
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-size: 13px;
   cursor: pointer;
   display: flex;
@@ -745,10 +767,12 @@ header h1 {
 }
 
 .icon-btn:hover {
-  background: var(--ink-50);
-  border-color: var(--ink-300);
-  color: var(--ink-700);
+  background: var(--secondary-hover-bg);
+  border-color: var(--secondary-border);
+  color: var(--text-primary);
 }
+
+.icon-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .icon-btn:active {
   background: var(--ink-100);
@@ -793,8 +817,8 @@ header h1 {
 
 .settings-form input[type="text"]:focus {
   outline: none;
-  border-color: var(--brand-500);
-  box-shadow: 0 0 0 3px rgba(231, 116, 27, 0.12);
+  border-color: var(--border-strong);
+  box-shadow: var(--focus-ring);
 }
 
 .settings-form input[type="text"]::placeholder {
@@ -809,24 +833,21 @@ header h1 {
 }
 
 button.primary {
-  background: var(--brand-500);
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   border: none;
   padding: 9px 18px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-weight: 600;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  box-shadow: var(--shadow-btn);
-  transition: all 0.12s ease;
+  transition: background 0.12s ease;
 }
 
-button.primary:hover {
-  background: var(--brand-600);
-  box-shadow: var(--shadow-btn-hover);
-  transform: translateY(-1px);
-}
+button.primary:hover { background: var(--primary-hover); }
+button.primary:active { background: var(--primary-active); }
+button.primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 button.primary:active { transform: translateY(0); }
 
@@ -868,8 +889,8 @@ hr {
   transition: all 0.12s ease;
 }
 
-.toggle-on  { background: var(--status-ok); }
-.toggle-on:hover  { background: #128a3d; }
+.toggle-on  { background: var(--primary); }
+.toggle-on:hover  { background: var(--primary-hover); }
 .toggle-off { background: var(--ink-400); }
 .toggle-off:hover { background: var(--ink-500); }
 
@@ -901,7 +922,7 @@ hr {
 }
 
 .hint-block em {
-  color: var(--brand-600);
+  color: var(--text-accent);
   font-style: normal;
   font-weight: 500;
 }

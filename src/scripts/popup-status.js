@@ -52,7 +52,7 @@
   }
 
   // Vector pencil for the mark buttons. Inline SVG in currentColor: inherits
-  // the button's orange and stays sharp at any DPI — unlike the old 32px
+  // the button's text colour and stays sharp at any DPI — unlike the old 32px
   // raster logo, which blurred when downscaled into a 14px slot.
   function makePencilGlyph() {
     return makeStrokeGlyph('mark-glyph',
@@ -95,7 +95,7 @@
     markBtn.appendChild(el('span', 'mark-label', 'Mark as manuscript received'));
     markBtn.appendChild(extArrow());
     markBtn.classList.remove('opened');
-    markBtn.classList.add('act-manuscript');  // blue — matches V4's manuscript button
+    markBtn.classList.add('act-manuscript');  // the view's one filled (ink) button
     markBtn.title = 'Open this lead in V4 and mark their status as manuscript received.';
   }
 
@@ -244,9 +244,9 @@
     return node;
   }
 
-  // Tracker palette (mirrors the node-circle hexes in popup.css). 'gray' is the
-  // future/neutral rail colour (--ink-200).
-  const TRACK_HEX = { lime: '#65a30d', green: '#16a34a', blue: '#0ea5e9', red: '#dc2626', gray: '#dfe4ec' };
+  // Tracker palette (mirrors --st-* in popup.css). 'gray' is the
+  // future/neutral rail colour (--border).
+  const TRACK_HEX = { lime: '#6D8E29', green: '#2E7D57', blue: '#35688C', red: '#A32D2D', gray: '#E6E1DA' };
 
   // A connector is a true gradient between the colours of the two nodes it
   // joins — so the rail flows continuously (lime → green → sky) and fades to
@@ -296,8 +296,8 @@
     return track;
   }
 
-  // Full-width action. Mark actions are FILLED (green/blue) and primary;
-  // "Open in V4" is a muted outline. All carry ↗ — every button navigates to
+  // Full-width action. The manuscript action is the view's single filled
+  // (ink) button; every other action is the outlined secondary. All carry ↗ — every button navigates to
   // V4, none commits in place.
   function makeCardButton(leadStatus, manuscriptHas, address) {
     const markBtn = el('button', 'mark-btn btn-block');
@@ -308,7 +308,6 @@
     } else if (manuscriptHas) {
       markBtn.dataset.terminal = '1';
       setManuscriptButtonState(markBtn);
-      markBtn.classList.add('fill-blue');
     } else { // no_response, no manuscript — neutral "Mark lead in V4" (muted)
       setMarkButtonState(markBtn);
     }
