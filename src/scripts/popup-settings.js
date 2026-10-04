@@ -140,5 +140,12 @@
     });
   }
 
+  const openToday = document.getElementById('open-today');
+  if (openToday) {
+    openToday.addEventListener('click', () => {
+      browser.tabs.create({ url: browser.runtime.getURL('triage.html') });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', load);
 })();

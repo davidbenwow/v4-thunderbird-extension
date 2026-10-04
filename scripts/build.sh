@@ -19,6 +19,10 @@ if ! node tests/run-tests.js; then
   echo "Error: tests failed — build aborted."
   exit 1
 fi
+if ! node tests/run-triage-tests.js; then
+  echo "Error: triage tests failed — build aborted."
+  exit 1
+fi
 for f in src/scripts/*.js; do
   node --check "$f" || { echo "Error: syntax check failed for $f — build aborted."; exit 1; }
 done
@@ -35,6 +39,19 @@ cd src
 find . -name ".DS_Store" -delete 2>/dev/null || true
 zip -r -X "../$BUILD_DIR/$XPI_NAME" . -x "*.DS_Store"
 cd ..
+
+# The XPI is publicly downloadable. Everything in it must be a file we mean to
+# ship: no test data, no notes, no exports, nothing that looks like a key.
+UNEXPECTED=$(unzip -Z1 "$BUILD_DIR/$XPI_NAME" | grep -vE '^(manifest\.json|popup-(status|settings)\.html|triage\.html|images/|images/icon-[0-9]+(-idle|-active)?\.png|images/imprints/|images/imprints/[a-z]+\.(png|svg)|scripts/|scripts/[a-z-]+\.js|styles/|styles/(popup|triage)\.css)$' || true)
+if [ -n "$UNEXPECTED" ]; then
+  echo "Error: unexpected files in the XPI — build aborted:"
+  echo "$UNEXPECTED"
+  exit 1
+fi
+if unzip -p "$BUILD_DIR/$XPI_NAME" | grep -aqE 'Bearer [A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9]{20,}'; then
+  echo "Error: something that looks like an API key is inside the XPI — build aborted."
+  exit 1
+fi
 
 # Post-build sanity: the XPI's internal manifest version must match what we
 # asked for, and manifest.json must sit at the archive root (ATN requirement).

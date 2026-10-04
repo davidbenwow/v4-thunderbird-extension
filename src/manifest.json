@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "V4 Contacts Checker",
-  "version": "1.31.5",
+  "version": "1.32.0",
   "description": "Checks whether email addresses in Thunderbird messages are already leads in V4 Contacts, and lets you jump to the lead's page in v4.vdm-vsg.de to mark it.",
   "browser_specific_settings": {
     "gecko": {
@@ -22,13 +22,26 @@
     "compose",
     "storage",
     "sensitiveDataUpload",
-    "https://v4.vdm-vsg.de/*"
+    "https://v4.vdm-vsg.de/*",
+    "accountsRead",
+    "messagesMove",
+    "https://omnireply-gateway.vercel.app/*"
   ],
   "background": {
     "scripts": [
       "scripts/internal-domains.js",
       "scripts/lead-statuses.js",
-      "scripts/background.js"
+      "scripts/background.js",
+      "scripts/triage-schema.js",
+      "scripts/triage-text.js",
+      "scripts/triage-rules.js",
+      "scripts/triage-link.js",
+      "scripts/triage-questions.js",
+      "scripts/triage-state.js",
+      "scripts/triage-throttle.js",
+      "scripts/triage-store.js",
+      "scripts/triage-scan.js",
+      "scripts/triage-background.js"
     ]
   },
   "options_ui": {

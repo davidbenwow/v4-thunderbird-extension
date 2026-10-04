@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Today — V4 Contacts Checker</title>
+  <link rel="stylesheet" href="styles/popup.css">
+  <link rel="stylesheet" href="styles/triage.css">
+</head>
+<body class="triage-body">
+  <header class="t-head">
+    <img src="images/icon-48.png" alt="" class="v4-logo">
+    <h1>Today</h1>
+    <span class="t-spacer"></span>
+    <button id="t-settings-btn" class="mark-btn" type="button" hidden>Settings</button>
+    <button id="t-refresh" class="mark-btn act-manuscript" type="button" hidden>Refresh</button>
+  </header>
+  <div id="t-progress" class="t-progress" role="status" aria-live="polite" hidden></div>
+  <main id="t-main" class="t-main"></main>
+  <div id="t-toast" class="t-toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="scripts/triage-schema.js"></script>
+  <script src="scripts/triage-page.js"></script>
+</body>
+</html>
